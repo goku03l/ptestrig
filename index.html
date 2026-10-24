@@ -59,6 +59,7 @@
   .chart h2 i { width:10px; height:3px; border-radius:2px; display:inline-block; }
   canvas { width:100%; height:200px; display:block; }
   footer { color:var(--muted); font-size:12px; margin-top:16px; display:flex; flex-wrap:wrap; gap:8px 20px; align-items:center; }
+  select { font:inherit; padding:5px 8px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--text); }
   button { font:inherit; padding:5px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--text); cursor:pointer; }
 </style>
 </head>
@@ -92,10 +93,16 @@
   </section>
 
   <footer>
-    <span id="count">0 samples this session</span>
-    <button id="csv">Download CSV</button>
+    <label>Chart range
+      <select id="range">
+        <option value="300000">5 min</option><option value="1800000" selected>30 min</option>
+        <option value="7200000">2 hours</option><option value="21600000">6 hours</option>
+        <option value="86400000">24 hours</option><option value="0">All stored</option>
+      </select></label>
+    <span id="count">0 samples</span>
+    <button id="csv">Download CSV (all stored)</button>
     <button id="clear">Clear history</button>
-    <span>History is kept in this browser tab only (last 30 min).</span>
+    <span>History is saved in this browser for 7 days, but only while this page is open and receiving.</span>
   </footer>
   </div>
 
@@ -117,12 +124,43 @@
 // Must match MQTT_TOPIC in the ESP32 sketch.
 const TOPIC  = 'remster-hq/motor-logger-7f3a9c1e5b24';
 const BROKER = 'wss://broker.hivemq.com:8884/mqtt';
-const KEEP_MS = 30 * 60 * 1000;
+const KEEP_MS = 7 * 24 * 3600 * 1000;   // history kept in this browser (IndexedDB)
 const STALE_MS = 6000;
 
 const $ = id => document.getElementById(id);
 let rows = [];            // {t:ms, pwm, a, t1, t2, raw}
+let rangeMs = 30 * 60 * 1000;   // chart window; 0 = all stored
 let last = null, lastAt = 0, online = null;
+
+// ---- persistent history (IndexedDB) ----
+let db = null, pending = [];
+function dbOpen() {
+  return new Promise(res => {
+    try {
+      const rq = indexedDB.open('peltier-history', 1);
+      rq.onupgradeneeded = () => rq.result.createObjectStore('rows', { keyPath: 't' });
+      rq.onsuccess = () => res(rq.result);
+      rq.onerror = () => res(null);
+    } catch (e) { res(null); }
+  });
+}
+function dbFlush() {
+  if (!db || !pending.length) return;
+  const batch = pending; pending = [];
+  const st = db.transaction('rows', 'readwrite').objectStore('rows');
+  for (const r of batch) st.put(r);
+  st.delete(IDBKeyRange.upperBound(Date.now() - KEEP_MS));
+}
+function dbLoad() {
+  return new Promise(res => {
+    if (!db) return res([]);
+    const rq = db.transaction('rows').objectStore('rows').getAll(IDBKeyRange.lowerBound(Date.now() - KEEP_MS));
+    rq.onsuccess = () => res(rq.result); rq.onerror = () => res([]);
+  });
+}
+function dbClear() { if (db) db.transaction('rows', 'readwrite').objectStore('rows').clear(); }
+setInterval(dbFlush, 5000);
+addEventListener('pagehide', dbFlush);
 
 function setPill(el, txt, cls, label) {
   $(el).className = 'pill ' + cls; $(txt).textContent = label;
@@ -185,6 +223,7 @@ function onData(m, retained) {
   if (retained) { lastAt = Date.now() - 60000; render(); return; }   // old snapshot from the broker, not live
   lastAt = Date.now();
   rows.push({ t: lastAt, pwm: m.pwm, a: m.a, t1: m.t1, t2: m.t2, raw: m });
+  pending.push(rows[rows.length - 1]);
   const cut = lastAt - KEEP_MS;
   while (rows.length && rows[0].t < cut) rows.shift();
   render();
@@ -205,7 +244,7 @@ function render() {
   $('tRssi').textContent = m.rssi;
   $('tUp').textContent = fmtUp(m.up);
   $('tTime').textContent = m.time;
-  $('count').textContent = rows.length + ' samples this session';
+  $('count').textContent = rows.length + ' samples stored';
   draw();
 }
 
@@ -226,11 +265,16 @@ function lineChart(cv, series, unitsRight) {
   cv.width = W * dpr; cv.height = H * dpr;
   const g = cv.getContext('2d'); g.scale(dpr, dpr);
   const L = 40, R = 12, T = 8, B = 20, w = W - L - R, h = H - T - B;
-  const now = Date.now(), span = Math.min(KEEP_MS, Math.max(60000, now - (rows[0]?.t ?? now)));
+  const now = Date.now(), span = rangeMs || Math.max(60000, now - (rows[0]?.t ?? now));
   const t0 = now - span;
+  let i0 = 0; { let a = 0, b = rows.length; while (a < b) { const m = (a + b) >> 1; if (rows[m].t < t0) a = m + 1; else b = m; } i0 = a; }
+  const stride = Math.max(1, Math.ceil((rows.length - i0) / (w * 1.5)));
+  const vis = [];
+  for (let i = i0; i < rows.length; i += stride) vis.push(rows[i]);
+  const gap = Math.max(5000, stride * 3000);
   g.font = '11px system-ui'; g.fillStyle = css('--muted'); g.strokeStyle = css('--grid'); g.lineWidth = 1;
   let lo = Infinity, hi = -Infinity;
-  for (const s of series) for (const r of rows) { const v = r[s.key]; if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }
+  for (const s of series) for (const r of vis) { const v = r[s.key]; if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }
   if (!isFinite(lo)) { lo = 0; hi = 1; }
   if (hi - lo < 1) { const c = (hi + lo) / 2; lo = c - .5; hi = c + .5; }
   const pad = (hi - lo) * .08; lo -= pad; hi += pad;
@@ -243,14 +287,14 @@ function lineChart(cv, series, unitsRight) {
   g.textAlign = 'center';
   for (let i = 0; i <= 3; i++) {
     const t = t0 + span * i / 3, d = new Date(t);
-    g.fillText(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: span < 600000 ? '2-digit' : undefined }), L + w * i / 3, H - 5);
+    g.fillText(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: span < 600000 ? '2-digit' : undefined, ...(span > 43200000 ? { month: 'short', day: 'numeric' } : {}) }), L + w * i / 3, H - 5);
   }
   for (const s of series) {
     g.strokeStyle = css(s.color); g.lineWidth = 2; g.lineJoin = 'round'; g.beginPath();
     let pen = false, prev = 0;
-    for (const r of rows) {
+    for (const r of vis) {
       const v = r[s.key];
-      if (v == null || (pen && r.t - prev > 5000)) { pen = false; if (v == null) continue; }
+      if (v == null || (pen && r.t - prev > gap)) { pen = false; if (v == null) continue; }
       const x = X(r.t), y = Y(v);
       pen ? g.lineTo(x, y) : g.moveTo(x, y); pen = true; prev = r.t;
     }
@@ -265,10 +309,14 @@ function draw() {
 addEventListener('resize', draw);
 matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', draw);
 
-$('clear').onclick = () => { rows = []; draw(); $('count').textContent = '0 samples this session'; };
+$('range').onchange = () => { rangeMs = +$('range').value; try { localStorage.setItem('range', rangeMs); } catch (e) {} draw(); };
+$('clear').onclick = () => {
+  if (!confirm('Delete all stored history from this browser?')) return;
+  rows = []; pending = []; dbClear(); draw(); $('count').textContent = '0 samples stored';
+};
 $('csv').onclick = () => {
-  const out = ['board_time,pwm_pct,direction,current_a,i_r_a,i_l_a,temp1_c,temp2_c'];
-  for (const r of rows) { const m = r.raw; out.push([m.time, m.pwm, m.dir, m.a, m.ir, m.il, m.t1 ?? '', m.t2 ?? ''].join(',')); }
+  const out = ['pc_time,board_time,pwm_pct,direction,current_a,i_r_a,i_l_a,temp1_c,temp2_c'];
+  for (const r of rows) { const m = r.raw; out.push([new Date(r.t).toISOString(), m.time, m.pwm, m.dir, m.a, m.ir, m.il, m.t1 ?? '', m.t2 ?? ''].join(',')); }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([out.join('\n')], { type: 'text/csv' }));
   a.download = 'peltier_cycle_' + new Date().toISOString().replace(/[:.]/g, '-') + '.csv';
@@ -290,7 +338,16 @@ client.on('message', (topic, payload, packet) => {
   try { onData(JSON.parse(s), packet.retain); } catch (e) { /* ignore malformed */ }
 });
 try { if (localStorage.getItem('tab') === 'ser') showTab(true); } catch (e) {}
+try { const r = localStorage.getItem('range'); if (r !== null && [...$('range').options].some(o => o.value === r)) { $('range').value = r; rangeMs = +r; } } catch (e) {}
 tick();
+(async () => {
+  db = await dbOpen();
+  const old = await dbLoad();
+  rows = old.concat(rows.filter(r => !old.length || r.t > old[old.length - 1].t));
+  pending = pending.filter(r => !old.length || r.t > old[old.length - 1].t);
+  $('count').textContent = rows.length + ' samples stored';
+  draw();
+})();
 </script>
 </body>
 </html>
