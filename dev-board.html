@@ -1,0 +1,1362 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dev Board</title>
+<style>
+:root{
+  --bg:#0f1115;--panel:#171a21;--panel2:#1d212a;--line:#2a2f3a;--text:#d7dce5;
+  --dim:#808999;--accent:#4da3ff;--ok:#3ddc84;--bad:#ff5d5d;--warn:#ffb54d;--tx:#c792ea;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--text);font:14px/1.4 system-ui,Segoe UI,sans-serif;display:flex;flex-direction:column}
+button,input,select{font:inherit;color:inherit;background:var(--panel2);border:1px solid var(--line);border-radius:6px;padding:5px 9px}
+button{cursor:pointer}
+button:hover:not(:disabled){border-color:var(--accent)}
+button:disabled{opacity:.45;cursor:not-allowed}
+button.primary{background:var(--accent);border-color:var(--accent);color:#04121f;font-weight:600}
+button.danger{background:var(--bad);border-color:var(--bad);color:#200404;font-weight:600}
+button.on{border-color:var(--accent);color:var(--accent)}
+label.chk{display:inline-flex;align-items:center;gap:5px;color:var(--dim);cursor:pointer;user-select:none}
+input[type=checkbox]{accent-color:var(--accent)}
+input[type=number]{width:80px}
+.hint{color:var(--dim);font-size:12px}
+.sp{flex:1}
+header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+header h1{font-size:15px;margin:0 8px 0 0;letter-spacing:.3px}
+#banner{display:none;background:#3a2410;color:var(--warn);padding:10px 14px}
+.app{flex:1;min-height:0;display:grid;grid-template-columns:270px 1fr}
+@media(max-width:800px){.app{grid-template-columns:1fr;grid-template-rows:auto 1fr}}
+
+/* sidebar */
+aside{border-right:1px solid var(--line);background:var(--panel);display:flex;flex-direction:column;min-height:0}
+@media(max-width:800px){aside{border-right:0;border-bottom:1px solid var(--line);max-height:34vh}}
+#cards{flex:1;overflow:auto;padding:8px;display:flex;flex-direction:column;gap:8px}
+.card{display:flex;gap:9px;align-items:flex-start;padding:9px 10px;background:var(--panel2);border:1px solid var(--line);border-radius:8px;cursor:pointer}
+.card.sel{border-color:var(--accent)}
+.card.gone{opacity:.55}
+.card .cb{flex:1;min-width:0}
+.card .nm{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.card .sub{color:var(--dim);font-size:12px}
+.card .tags{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+.tag{font-size:11px;padding:1px 7px;border-radius:9px;background:#26324a;color:var(--accent)}
+.tag.fw{background:#243a2e;color:var(--ok)}
+.card .x{padding:0 6px;border:0;background:none;color:var(--dim)}
+.dot{width:9px;height:9px;border-radius:50%;background:var(--dim);margin-top:6px;flex:none}
+.dot.open{background:var(--ok)}.dot.probing{background:var(--warn)}.dot.gone{background:var(--bad)}
+.side-foot{padding:8px;border-top:1px solid var(--line);display:flex;flex-direction:column;gap:6px}
+.side-foot .row{display:flex;gap:6px}.side-foot button{flex:1}
+.empty{padding:14px 6px}
+
+/* content */
+.content{display:flex;flex-direction:column;min-width:0;min-height:0}
+#strip{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:9px 12px;border-bottom:1px solid var(--line);background:var(--panel)}
+#strip .ttl{font-weight:600}
+#adv{display:none;flex-wrap:wrap;gap:10px;align-items:center;padding:8px 14px;border-bottom:1px solid var(--line);background:var(--panel)}
+#adv.show{display:flex}
+#adv label{color:var(--dim);display:inline-flex;gap:5px;align-items:center}
+#msg{padding:0 14px;min-height:0;color:var(--warn);font-size:12px}
+#msg:not(:empty){padding:5px 14px;border-bottom:1px solid var(--line)}
+main{flex:1;min-height:0;display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:10px}
+main.v-mon{grid-template-columns:1fr}main.v-mon #plotPane{display:none}
+main.v-plot{grid-template-columns:1fr}main.v-plot #monPane{display:none}
+#codePane{display:none}
+main.v-code{grid-template-columns:1.2fr 1fr}main.v-code #codePane{display:flex}main.v-code #plotPane{display:none}
+#code{flex:1;min-height:120px;resize:none;border:0;border-radius:0;background:#0b0d11;color:var(--text);padding:10px;font:13px/1.5 Consolas,Menlo,monospace;tab-size:2;white-space:pre;overflow:auto;outline:none}
+#cOut{height:150px;margin:0;overflow:auto;background:#0b0d11;border-top:1px solid var(--line);padding:8px 10px;font:12px/1.4 Consolas,monospace;white-space:pre-wrap;word-break:break-all}
+#cOut:empty{display:none}
+.bar select{max-width:190px}
+@media(max-width:1100px){main{grid-template-columns:1fr;grid-auto-rows:minmax(0,1fr)}}
+.pane{display:flex;flex-direction:column;min-height:0;min-width:0;background:var(--panel);border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:7px 10px;border-bottom:1px solid var(--line)}
+.bar b{font-size:13px}
+#monHost{flex:1;min-height:0;position:relative}
+.mon{position:absolute;inset:0;display:none;overflow:auto;padding:8px 10px;font:12.5px/1.45 Consolas,Menlo,monospace;white-space:pre-wrap;word-break:break-all}
+.mon.cur{display:block}
+.mon .l{display:block}
+.mon .t{color:var(--dim);margin-right:8px;display:none}
+#monHost.ts .t{display:inline}
+.mon .tx{color:var(--tx)}
+.mon .sys{color:var(--warn)}
+#send{display:flex;gap:8px;padding:8px 10px;border-top:1px solid var(--line)}
+#send input[type=text]{flex:1;min-width:0;font-family:Consolas,monospace}
+#plotWrap{flex:1;min-height:0;position:relative}
+#plot{position:absolute;inset:0;width:100%;height:100%}
+#legend{display:flex;flex-wrap:wrap;gap:6px;padding:7px 10px;border-top:1px solid var(--line);min-height:36px;align-items:center}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border:1px solid var(--line);border-radius:12px;cursor:pointer;user-select:none;font-size:12px}
+.chip i{width:10px;height:10px;border-radius:50%;display:inline-block}
+.chip.off{opacity:.4}
+.chip .val{color:var(--dim);font-family:Consolas,monospace}
+.stats{color:var(--dim);font-size:12px}
+
+/* flash dialog */
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:16px;width:min(560px,94vw)}
+dialog::backdrop{background:#000a}
+dialog h2{margin:0 0 10px;font-size:15px}
+dialog .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:8px 0}
+#fprog{width:100%;height:8px;accent-color:var(--accent)}
+#flog{background:#0b0d11;border:1px solid var(--line);border-radius:6px;height:150px;overflow:auto;margin:8px 0 0;padding:8px;font:12px/1.4 Consolas,monospace;white-space:pre-wrap}
+</style>
+</head>
+<body>
+<header>
+  <h1>Dev Board</h1>
+  <button id="btnAdd" class="primary" title="Pick a known development board (USB filter applied)">+ Add board</button>
+  <button id="btnAddAny" title="Show every serial port, including unknown devices">Any port…</button>
+  <button id="btnScanWifi" title="Scan the local network for boards that stream over WiFi (TCP port 3333). Needs server.py">Scan WiFi</button>
+  <button id="btnAddWifi" title="Add a WiFi board by host name / IP">+ WiFi</button>
+  <label class="chk" title="Connect automatically to boards that were allowed before, and again when they are re-plugged or re-enumerate after an upload"><input type="checkbox" id="optAuto" checked> Auto-connect</label>
+  <span class="sp"></span>
+  <span class="stats" id="rate"></span>
+  <span>
+    <button data-view="split" class="on">Split</button>
+    <button data-view="mon">Monitor</button>
+    <button data-view="plot">Plotter</button>
+    <button data-view="code">Code</button>
+  </span>
+</header>
+<div id="banner">This browser has no Web Serial support. Open this file in Chrome, Edge or Opera (desktop).</div>
+
+<div class="app">
+  <aside>
+    <div id="cards"></div>
+    <div class="side-foot">
+      <span class="hint">Boards are recognised by USB ID, then by what they print (boot log, firmware banner).</span>
+    </div>
+  </aside>
+
+  <div class="content">
+    <div id="strip">
+      <span class="ttl" id="sName">No board selected</span>
+      <span class="hint" id="sSub"></span>
+      <span class="sp"></span>
+      <label class="chk">Baud
+        <input id="baud" type="text" list="bauds" value="auto" size="8" disabled>
+        <datalist id="bauds"><option>auto<option>300<option>1200<option>2400<option>4800<option>9600<option>19200<option>38400<option>57600<option>74880<option>115200<option>230400<option>250000<option>460800<option>500000<option>921600<option>1000000<option>2000000</datalist>
+      </label>
+      <button id="btnConnect" disabled>Connect</button>
+      <button id="btnReset" disabled title="Hardware reset through DTR/RTS (works on boards with auto-reset circuitry)">Reset</button>
+      <button id="btnBoot" disabled style="display:none">Bootloader</button>
+      <button id="btnFlash" disabled style="display:none">Flash…</button>
+      <button id="btnAdv">Settings ▾</button>
+    </div>
+    <div id="adv">
+      <label>Data bits <select id="dataBits"><option>8<option>7</select></label>
+      <label>Parity <select id="parity"><option>none<option>even<option>odd</select></label>
+      <label>Stop bits <select id="stopBits"><option>1<option>2</select></label>
+      <label>Flow control <select id="flow"><option>none<option>hardware</select></label>
+      <button id="btnDtr" disabled>DTR</button>
+      <button id="btnRts" disabled>RTS</button>
+      <span class="hint">Applied the next time a board connects.</span>
+    </div>
+    <div id="msg"></div>
+
+    <main id="main">
+      <section class="pane" id="codePane">
+        <div class="bar">
+          <b>Code</b>
+          <select id="cLang"><option value="cpp">Arduino C++<option value="mpy">MicroPython</select>
+          <select id="cBoard"></select>
+          <select id="cTpl"></select>
+          <span class="sp"></span>
+          <button id="cOpen">Open…</button>
+          <button id="cSave">Save</button>
+          <input type="file" id="cFile" hidden>
+        </div>
+        <div class="bar" id="aiBar">
+          <b title="Generate or fix code with Claude (key stays on the local server)">AI</b>
+          <input type="text" id="aiPrompt" placeholder="Describe what the board should do, or ask for a fix…" style="flex:1;min-width:140px">
+          <label class="chk" title="Send the last monitor lines and compile output so Claude can see what happened"><input type="checkbox" id="aiCtx" checked> context</label>
+          <button id="aiGo" class="primary">Generate</button>
+          <button id="aiUndo" style="display:none">Undo</button>
+          <button id="aiKeyBtn" title="Set the Anthropic API key">Key</button>
+        </div>
+        <div class="bar" id="aiKeyBar" style="display:none">
+          <input type="password" id="aiKey" placeholder="sk-ant-…" style="flex:1;min-width:140px" autocomplete="off">
+          <label class="chk"><input type="checkbox" id="aiRemember"> remember on this PC</label>
+          <button id="aiKeySave">Save key</button>
+          <button id="aiKeyClear">Forget</button>
+          <span class="hint">Kept by the local server, never sent back to the page.</span>
+        </div>
+        <textarea id="code" spellcheck="false" autocapitalize="off" autocomplete="off"></textarea>
+        <div class="bar">
+          <button id="cCompile" title="Compile only">Compile</button>
+          <button id="cUpload" class="primary" title="Compile and upload to the selected board (Ctrl+Enter)">Upload ▶</button>
+          <button id="cSaveMain" style="display:none" title="Store as main.py on the board and restart it">Save as main.py</button>
+          <button id="cCore" style="display:none">Install core</button>
+          <button id="cInstall" style="display:none">Install arduino-cli</button>
+          <span class="hint" id="cTool"></span>
+        </div>
+        <pre id="cOut"></pre>
+      </section>
+
+      <section class="pane" id="monPane">
+        <div class="bar">
+          <b>Monitor</b>
+          <label class="chk"><input type="checkbox" id="optTs"> Timestamps</label>
+          <label class="chk"><input type="checkbox" id="optScroll" checked> Autoscroll</label>
+          <label class="chk"><input type="checkbox" id="optHex"> Hex</label>
+          <span class="sp"></span>
+          <button id="btnSaveLog">Save log</button>
+          <button id="btnClearMon">Clear</button>
+        </div>
+        <div id="monHost"></div>
+        <form id="send" autocomplete="off">
+          <input type="text" id="sendText" placeholder="Send to board… (↑/↓ for history)" disabled>
+          <select id="eol"><option value="">No line end<option value="\n" selected>Newline<option value="\r">Carriage return<option value="\r\n">Both CR+LF</select>
+          <button id="btnSend" disabled>Send</button>
+        </form>
+      </section>
+
+      <section class="pane" id="plotPane">
+        <div class="bar">
+          <b>Plotter</b>
+          <label class="chk">Points <input type="number" id="win" value="500" min="10" max="20000"></label>
+          <label class="chk">Y min <input type="number" id="ymin" placeholder="auto"></label>
+          <label class="chk">Y max <input type="number" id="ymax" placeholder="auto"></label>
+          <span class="sp"></span>
+          <button id="btnPause">Pause</button>
+          <button id="btnCsv">Export CSV</button>
+          <button id="btnClearPlot">Clear</button>
+        </div>
+        <div id="plotWrap"><canvas id="plot"></canvas></div>
+        <div id="legend"><span class="hint">Print lines like <code>12,34,56</code> or <code>temp:23.5 hum:40</code> — each number becomes a trace.</span></div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<dialog id="wdlg">
+  <h2>Add WiFi board</h2>
+  <div class="hint">The board listens on a TCP port and prints lines like serial. server.py makes the connection, reconnects if it drops, and saves <code>PWM_pct:</code> lines to a CSV in the <code>logs</code> folder.</div>
+  <div class="row">
+    <label class="chk">Host <input type="text" id="wHost" value="motor-logger.local" size="24" placeholder="name.local or 192.168.1.50"></label>
+    <label class="chk">Port <input type="number" id="wPort" value="3333" min="1" max="65535" style="width:80px"></label>
+  </div>
+  <div class="row">
+    <span class="sp"></span>
+    <button id="wCancel">Cancel</button>
+    <button id="wAdd" class="primary">Add &amp; connect</button>
+  </div>
+</dialog>
+
+<dialog id="dlg">
+  <h2>Flash ESP firmware</h2>
+  <div class="hint">Uses esptool-js (loaded from a CDN on first use). Supports ESP32 / S2 / S3 / C3 / C6 / ESP8266 boards. The board is disconnected from the monitor while flashing.</div>
+  <div class="row"><input type="file" id="fFile" accept=".bin"></div>
+  <div class="row">
+    <label class="chk">Address <input type="text" id="fAddr" value="0x0" size="9"></label>
+    <label class="chk">Flash baud
+      <select id="fBaud"><option>115200<option selected>460800<option>921600</select>
+    </label>
+    <span class="hint">merged/factory image → 0x0 · app-only ESP32 image → 0x10000</span>
+  </div>
+  <div class="row">
+    <button id="fIdent">Identify chip</button>
+    <button id="fGo" class="primary">Flash</button>
+    <span class="sp"></span>
+    <button id="fClose">Close</button>
+  </div>
+  <progress id="fprog" max="100" value="0"></progress>
+  <div id="flog"></div>
+</dialog>
+
+<script>
+'use strict';
+const $ = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const store = {
+  get(k, d){ try { const v = localStorage.getItem(k); return v === null ? d : v; } catch { return d; } },
+  set(k, v){ try { localStorage.setItem(k, v); } catch {} }
+};
+if (!('serial' in navigator)) $('banner').style.display = 'block';
+
+/* ---------------- board database ---------------- */
+const VENDORS = {0x2341:'Arduino',0x2A03:'Arduino',0x1A86:'CH340/CH341',0x10C4:'Silicon Labs CP210x',0x0403:'FTDI',0x067B:'Prolific',
+  0x239A:'Adafruit',0x303A:'Espressif',0x2E8A:'Raspberry Pi',0x0483:'STMicroelectronics',0x1366:'SEGGER',0x16C0:'PJRC/Teensy',0x1D50:'Black Magic',0x04D8:'Microchip'};
+const BRIDGE = new Set([0x10C4, 0x1A86, 0x0403, 0x067B]);   // generic USB-UART chips: the board behind them is unknown
+const FAMILY_BY_VENDOR = {0x303A:'esp', 0x2E8A:'rp2040', 0x2341:'avr', 0x2A03:'avr', 0x16C0:'teensy', 0x0483:'stm32', 0x239A:'native'};
+// [name, family]  family: avr | esp | rp2040 | native (1200bps-touch bootloader) | teensy | stm32 | bridge | generic
+const BOARDS = {
+  '2341:0043':['Arduino Uno','avr'], '2341:0001':['Arduino Uno','avr'], '2A03:0043':['Arduino Uno (clone)','avr'],
+  '2341:0010':['Arduino Mega 2560','avr'], '2341:0042':['Arduino Mega 2560','avr'],
+  '2341:8036':['Arduino Leonardo','native'], '2341:0036':['Arduino Leonardo (bootloader)','native'], '2341:8037':['Arduino Micro','native'],
+  '2341:0058':['Arduino Nano Every','avr'], '2341:805A':['Arduino Nano 33 BLE','native'], '2341:0070':['Arduino Nano ESP32','esp'],
+  '303A:1001':['ESP32 USB-JTAG/Serial (S3 / C3 / C6)','esp'], '303A:0002':['ESP32-S2 (native USB)','esp'], '303A:0009':['ESP32-S3 (native USB)','esp'],
+  '2E8A:0005':['Raspberry Pi Pico (MicroPython)','rp2040'], '2E8A:000A':['Raspberry Pi Pico (CDC)','rp2040'],
+  '16C0:0483':['Teensy','teensy'], '0483:5740':['STM32 Virtual COM Port','stm32'], '0483:374B':['ST-Link VCP (Nucleo / Discovery)','stm32'],
+  '1366:0105':['SEGGER J-Link CDC','generic'], '1D50:6018':['Black Magic Probe','generic'],
+  '10C4:EA60':['CP2102 USB-UART (ESP32 / ESP8266 dev boards)','bridge'], '1A86:7523':['CH340 USB-UART (Nano clones, NodeMCU)','bridge'],
+  '1A86:55D4':['CH9102 USB-UART (ESP32 dev boards)','bridge'], '0403:6001':['FTDI FT232R USB-UART','bridge']
+};
+const hex4 = n => (n || 0).toString(16).padStart(4, '0').toUpperCase();
+function identify(info){
+  const v = info.usbVendorId;
+  if (v === undefined) return {n:'Serial port', f:'generic', vendor:'', key:''};
+  const key = hex4(v) + ':' + hex4(info.usbProductId), vendor = VENDORS[v] || 'USB ' + hex4(v), b = BOARDS[key];
+  if (b) return {n:b[0], f:b[1], vendor, key};
+  if (BRIDGE.has(v)) return {n:vendor + ' USB-UART bridge', f:'bridge', vendor, key};
+  return {n:vendor + ' device', f:FAMILY_BY_VENDOR[v] || 'generic', vendor, key};
+}
+// what the board prints tells more than the USB ID: [regex, family, label]
+const FPS = [
+  [/ESP-ROM:([\w-]+)/, 'esp', m => 'Espressif ' + m[1].split('-')[0]],
+  [/rst:0x[0-9a-f]+ \([A-Z_0-9]+\),boot:0x/, 'esp', () => 'ESP32 boot log'],
+  [/ets (?:Jan {1,2}8 2013|Jun {1,2}8 2016)|rst cause:\d/, 'esp', () => 'ESP8266 boot log'],
+  [/Adafruit CircuitPython ([\w.\-]+)/, null, m => 'CircuitPython ' + m[1]],
+  [/MicroPython v?([\w.\-]+)/, null, m => 'MicroPython ' + m[1]],
+  [/Marlin ?([\d.]+)?|FIRMWARE_NAME:Marlin/, null, m => 'Marlin' + (m[1] ? ' ' + m[1] : '')],
+  [/Grbl ([\d.]+\w*)/, null, m => 'GRBL ' + m[1]],
+  [/Klipper/, null, () => 'Klipper'],
+  [/Tasmota/, null, () => 'Tasmota'],
+  [/ESPHome/i, 'esp', () => 'ESPHome']
+];
+
+/* ---------------- WiFi boards: a Web-Serial-shaped port backed by server.py's TCP bridge ---------------- */
+class WifiPort {
+  constructor(host, port){
+    this.wifi = true; this.host = host; this.tcp = port; this.id = 'w' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+    this.readable = null; this.ctl = null;
+    this.writable = { getWriter: () => ({
+      write: async bytes => {
+        const r = await fetch('/api/wifi-send', {method:'POST', headers:{'X-Dev-Board':'1','Content-Type':'application/json'},
+          body: JSON.stringify({id:this.id, data:new TextDecoder().decode(bytes)})});
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'send failed');
+      },
+      releaseLock(){}
+    }) };
+  }
+  getInfo(){ return {}; }
+  async setSignals(){}
+  async open(){
+    this.ctl = new AbortController();
+    const r = await fetch('/api/wifi', {method:'POST', headers:{'X-Dev-Board':'1','Content-Type':'application/json'}, signal:this.ctl.signal,
+      body: JSON.stringify({id:this.id, host:this.host, port:this.tcp})});
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'server error ' + r.status);
+    const rd = r.body.getReader();
+    this.readable = new ReadableStream({
+      pull: async c => {
+        try {
+          const {value, done} = await rd.read();
+          if (done){ this.readable = null; c.close(); } else c.enqueue(value);
+        } catch (e) { this.readable = null; c.error(e); }
+      },
+      cancel: () => { this.readable = null; try { this.ctl.abort(); } catch {} }
+    });
+  }
+  async close(){
+    this.readable = null;
+    try { this.ctl && this.ctl.abort(); } catch {}
+    try { await api('/api/wifi-close', {id:this.id}); } catch {}
+  }
+  forget(){ saveWifi(this.id, false); }
+}
+const wifiKey = p => p.host + ':' + p.tcp;
+function saveWifi(id, add){
+  let list = []; try { list = JSON.parse(store.get('wifi', '[]')); } catch {}
+  list = list.filter(x => x.id !== id);
+  if (add) list.push(add);
+  store.set('wifi', JSON.stringify(list));
+}
+function addWifi(host, tcp, remember){
+  const p = new WifiPort(host, tcp);
+  const s = newSession(p);
+  s.board = {n:'WiFi · ' + host, f:'generic', vendor:host + ' port ' + tcp, key:''};
+  s.baudSetting = 'wifi';
+  if (remember) saveWifi(p.id, {host, tcp, id:p.id});
+  select(s);
+  return s;
+}
+$('btnAddWifi').onclick = () => $('wdlg').showModal();
+// find boards on the LAN and list them next to the USB ones
+let scanning = false;
+async function scanWifi(quiet){
+  if (scanning) return;
+  scanning = true; $('btnScanWifi').disabled = true;
+  if (!quiet) msg('Scanning the network for WiFi boards…');
+  try {
+    const r = await api('/api/wifi-scan?ports=' + (parseInt($('wPort').value, 10) || 3333));
+    if (!r.ok) throw new Error('needs server.py');
+    const list = (await r.json()).boards || [];
+    let n = 0;
+    for (const b of list){
+      if (sessions.some(s => s.port.wifi && s.port.host === b.host && s.port.tcp === b.port)) continue;
+      const s = addWifi(b.host, b.port, true); n++;
+      if ($('optAuto').checked) connectSession(s);
+    }
+    msg(quiet ? '' : list.length ? `Found ${list.length} WiFi board(s)${n ? '' : ' (already listed)'}.` : 'No WiFi boards found on this network. Use "+ WiFi" to enter an address.');
+  } catch (e) { if (!quiet) msg('WiFi scan failed: ' + e.message); }
+  scanning = false; $('btnScanWifi').disabled = false;
+}
+$('btnScanWifi').onclick = () => scanWifi(false);
+$('wCancel').onclick = () => $('wdlg').close();
+$('wAdd').onclick = () => {
+  const host = $('wHost').value.trim(), tcp = parseInt($('wPort').value, 10);
+  if (!/^[\w.\-]{1,253}$/.test(host) || !(tcp > 0 && tcp < 65536)){ msg('Enter a host name / IP and a port.'); return; }
+  $('wdlg').close();
+  const s = addWifi(host, tcp, true);
+  if ($('optAuto').checked) connectSession(s);
+};
+
+/* ---------------- sessions (one per board) ---------------- */
+const sessions = [];
+let cur = null, sid = 0;
+const COLORS = ['#4da3ff','#ff6b6b','#3ddc84','#ffb54d','#c792ea','#2ee6d6','#f78fb3','#d4e157','#ff8a50','#9fa8da'];
+const RATES = [115200, 9600, 57600, 38400, 19200, 230400, 460800, 921600, 74880, 4800, 2400, 250000, 500000, 1000000, 1200];
+const MAX_LINES = 4000;
+
+function newSession(port){
+  const s = {
+    id: ++sid, port, board: identify(port.getInfo ? port.getInfo() : {}),
+    open:false, probing:false, gone:false, wantOpen:false, wasOpen:false, keepReading:false, cancel:false, busy:false,
+    reader:null, task:null, baud:0, baudSetting:'auto', fw:'', fam:'', chip:'',
+    decoder:new TextDecoder('utf-8', {fatal:false}), pending:'', fpBuf:'', rxBytes:0, sigs:{},
+    queue:[], logLines:[], dirtyMon:false, recon:[],
+    rows:[], names:[], hidden:new Set(), paused:false
+  };
+  s.mon = document.createElement('div'); s.mon.className = 'mon';
+  s.pendEl = document.createElement('span'); s.pendEl.className = 'l'; s.mon.appendChild(s.pendEl);
+  $('monHost').appendChild(s.mon);
+  sessions.push(s);
+  if (!cur) select(s); else renderCards();
+  return s;
+}
+const fam = s => s.fam || s.board.f;
+
+function select(s){
+  cur = s;
+  for (const x of sessions) x.mon.classList.toggle('cur', x === s);
+  renderCards(); renderStrip(); renderLegend(); dirtyPlot = true;
+}
+
+function h(tag, cls, text){
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  if (text !== undefined) e.textContent = text;
+  return e;
+}
+function state(s){ return s.open ? 'open' : s.probing ? 'probing' : s.gone ? 'gone' : 'idle'; }
+
+function renderCards(){
+  const box = $('cards'); box.textContent = '';
+  if (!sessions.length){
+    const e = h('div', 'empty hint');
+    e.append('No boards yet.', document.createElement('br'), 'Plug one in and press ', h('b', '', '+ Add board'),
+      '. Once allowed, it is recognised and connected automatically next time.');
+    box.appendChild(e);
+    return;
+  }
+  for (const s of sessions){
+    const c = h('div', 'card' + (s === cur ? ' sel' : '') + (s.gone ? ' gone' : ''));
+    const cb = h('div', 'cb');
+    const sub = [s.board.vendor, s.board.key].filter(Boolean).join(' · ') + (s.open && !s.port.wifi ? ' · ' + s.baud + ' baud' : '');
+    cb.append(h('div', 'nm', s.chip || s.board.n), h('div', 'sub', s.gone ? 'unplugged' : s.probing ? 'detecting baud rate…' : sub));
+    const tags = h('div', 'tags');
+    if (s.fw) tags.appendChild(h('span', 'tag fw', s.fw));
+    if (s.chip) tags.appendChild(h('span', 'tag', s.board.n));
+    cb.appendChild(tags);
+    c.append(h('span', 'dot ' + state(s)), cb);
+    if (!s.open && !s.probing){
+      const x = h('button', 'x', '×'); x.title = 'Remove from list';
+      x.onclick = async ev => { ev.stopPropagation(); await removeSession(s); };
+      c.appendChild(x);
+    }
+    c.onclick = () => select(s);
+    box.appendChild(c);
+  }
+}
+
+async function removeSession(s){
+  try { if (s.port.forget) await s.port.forget(); } catch {}
+  s.mon.remove();
+  sessions.splice(sessions.indexOf(s), 1);
+  if (cur === s) { cur = null; if (sessions.length) select(sessions[0]); else { renderCards(); renderStrip(); renderLegend(); dirtyPlot = true; } }
+  else renderCards();
+}
+
+function renderStrip(){
+  const s = cur, none = !s;
+  if (typeof syncCodeBoard === 'function') syncCodeBoard();
+  $('sName').textContent = none ? 'No board selected' : (s.chip || s.board.n);
+  $('sSub').textContent = none ? '' : [s.fw, s.board.key].filter(Boolean).join(' · ');
+  const busy = none || s.busy;
+  $('baud').disabled = none || s.open || s.probing || s.port.wifi;
+  $('baud').value = none ? 'auto' : s.baudSetting;
+  const b = $('btnConnect');
+  b.disabled = none || s.gone || s.busy;
+  b.textContent = none ? 'Connect' : (s.probing ? 'Cancel' : s.open ? 'Disconnect' : 'Connect');
+  b.className = (!none && (s.open || s.probing)) ? 'danger' : 'primary';
+  $('btnReset').disabled = busy || !s.open || s.port.wifi;
+  const f = none ? '' : fam(s);
+  const boot = f === 'esp' || f === 'bridge' || f === 'native' || f === 'rp2040';
+  $('btnBoot').style.display = boot ? '' : 'none'; $('btnBoot').disabled = busy || s.gone || (!s.open && !(f === 'native' || f === 'rp2040'));
+  $('btnBoot').title = (f === 'native' || f === 'rp2040') ? 'Reboot into the bootloader (1200 bps touch)' : 'Put the ESP into download mode via DTR/RTS';
+  const flash = f === 'esp' || f === 'bridge';
+  $('btnFlash').style.display = flash ? '' : 'none'; $('btnFlash').disabled = busy || s.gone;
+  for (const id of ['sendText','btnSend']) $(id).disabled = none || !s.open;
+  for (const id of ['btnDtr','btnRts']) $(id).disabled = none || !s.open || s.port.wifi;
+  $('btnDtr').classList.toggle('on', !none && !!s.sigs.dataTerminalReady);
+  $('btnRts').classList.toggle('on', !none && !!s.sigs.requestToSend);
+  $('btnPause').textContent = !none && s.paused ? 'Resume' : 'Pause';
+  $('btnPause').classList.toggle('on', !none && s.paused);
+}
+function renderAll(){ renderCards(); renderStrip(); }
+function msg(t){ $('msg').textContent = t || ''; }
+
+/* ---------------- monitor ---------------- */
+function ts(){ const d = new Date(); return d.toTimeString().slice(0,8) + '.' + String(d.getMilliseconds()).padStart(3,'0'); }
+function addLine(s, text, cls){
+  const t = ts();
+  s.queue.push({text, cls, t});
+  s.logLines.push(`[${t}] ${text}`);
+  if (s.logLines.length > 200000) s.logLines.splice(0, 20000);
+  s.dirtyMon = true;
+}
+function flushMonitor(s){
+  if (!s.dirtyMon) return;
+  for (const q of s.queue.splice(0)){
+    const row = h('span', 'l' + (q.cls ? ' ' + q.cls : ''));
+    row.append(h('span', 't', q.t), document.createTextNode(q.text));
+    s.mon.insertBefore(row, s.pendEl);
+  }
+  while (s.mon.childElementCount > MAX_LINES + 1) s.mon.removeChild(s.mon.firstChild);
+  s.pendEl.textContent = s.pending;
+  s.dirtyMon = false;
+  if (s === cur && $('optScroll').checked) s.mon.scrollTop = s.mon.scrollHeight;
+}
+
+/* ---------------- incoming data ---------------- */
+function detectFirmware(s, text){
+  if (s.fpDone) return;
+  s.fpBuf += text;
+  let hit = null;                       // a firmware banner beats a boot-log hint
+  for (const [re, family, label] of FPS){
+    const m = re.exec(s.fpBuf);
+    if (m && (!hit || !family)) hit = {family, fw: label(m)};
+  }
+  if (hit){
+    if (hit.family && !s.fam) s.fam = hit.family;
+    if (hit.fw !== s.fw){ s.fw = hit.fw; addLine(s, `— detected: ${hit.fw} —`, 'sys'); renderAll(); }
+    if (!hit.family) s.fpDone = true;
+  }
+  if (s.fpBuf.length > 20000) { s.fpBuf = s.fpBuf.slice(-6000); }
+}
+function onBytes(s, bytes){
+  s.rxBytes += bytes.length;
+  const text = s.decoder.decode(bytes, {stream:true});
+  detectFirmware(s, text);
+  const hexMode = $('optHex').checked;
+  if (hexMode) addLine(s, [...bytes].map(b => b.toString(16).padStart(2,'0')).join(' '));
+  s.pending += text;
+  if (s.pending.length > 100000) s.pending = s.pending.slice(-50000);   // device never sends newline
+  const parts = s.pending.split('\n');
+  s.pending = parts.pop();
+  for (let line of parts){
+    if (line.endsWith('\r')) line = line.slice(0, -1);
+    if (!hexMode) addLine(s, line);
+    plotLine(s, line);
+  }
+  s.dirtyMon = true;
+}
+
+async function readLoop(s){
+  while (s.port.readable && s.keepReading){
+    s.reader = s.port.readable.getReader();
+    try {
+      for (;;){
+        const {value, done} = await s.reader.read();
+        if (done) break;
+        if (value && value.length) onBytes(s, value);
+      }
+    } catch (e) {
+      if (s.keepReading) addLine(s, 'Read error: ' + e.message, 'sys');
+    } finally {
+      try { s.reader.releaseLock(); } catch {}
+      s.reader = null;
+    }
+  }
+  if (s.keepReading) await closeSession(s, 'lost', true);
+}
+
+/* ---------------- connect / disconnect ---------------- */
+function serialOpts(baud){
+  return { baudRate: baud, dataBits: +$('dataBits').value, parity: $('parity').value,
+           stopBits: +$('stopBits').value, flowControl: $('flow').value, bufferSize: 65536 };
+}
+async function openPort(s, baud){
+  await s.port.open(serialOpts(baud));
+  s.baud = baud; s.open = true; s.wantOpen = true; s.keepReading = true; s.gone = false;
+  s.pending = ''; s.decoder = new TextDecoder('utf-8', {fatal:false}); s.rxBytes = 0; s.sigs = {};
+  if (s.board.key) store.set('baud:' + s.board.key, baud);
+  addLine(s, `— connected @ ${baud} baud —`, 'sys');
+  s.task = readLoop(s);
+  renderAll();
+}
+// reason: 'user' | 'lost' | 'quiet' (internal re-open, no log)
+async function closeSession(s, reason, fromTask){
+  if (!s.open) return;
+  s.open = false; s.keepReading = false;
+  const was = s.wantOpen;
+  if (reason === 'user') s.wantOpen = false;
+  try { if (s.reader) await s.reader.cancel(); } catch {}
+  if (!fromTask) { try { await s.task; } catch {} }
+  try { await s.port.close(); } catch {}
+  s.task = null;
+  s.wasOpen = reason === 'lost' ? was : false;
+  if (reason !== 'quiet') addLine(s, reason === 'lost' ? '— connection lost —' : '— disconnected —', 'sys');
+  renderAll();
+}
+
+function openWifi(s){
+  s.open = true; s.wantOpen = true; s.keepReading = true; s.gone = false;
+  s.pending = ''; s.decoder = new TextDecoder('utf-8', {fatal:false}); s.rxBytes = 0; s.sigs = {};
+  addLine(s, `— connecting to ${s.port.host} port ${s.port.tcp} —`, 'sys');
+  s.task = readLoop(s);
+  renderAll();
+}
+// listen briefly at each baud rate; the one that gives the most readable text wins
+async function autoBaud(s){
+  const pref = parseInt(store.get('baud:' + s.board.key, ''), 10);
+  const order = [...new Set([pref, fam(s) === 'avr' ? 9600 : 0, ...RATES].filter(r => r > 0))];
+  let best = null;
+  s.probing = true; s.cancel = false; renderAll();
+  try {
+    for (const rate of order){
+      if (s.cancel) throw new Error('cancelled');
+      msg(`Detecting baud rate… trying ${rate}`);
+      try { await s.port.open(serialOpts(rate)); } catch (e) { addLine(s, `Cannot open at ${rate}: ${e.message}`, 'sys'); continue; }
+      const r = s.port.readable.getReader(); const buf = [];
+      const timer = setTimeout(() => r.cancel().catch(() => {}), 1000);
+      try { for (;;){ const {value, done} = await r.read(); if (done) break; if (value) buf.push(...value); } } catch {}
+      clearTimeout(timer); try { r.releaseLock(); } catch {}
+      try { await s.port.close(); } catch {}
+      if (buf.length >= 4){
+        const ok = buf.filter(b => (b >= 32 && b < 127) || b === 10 || b === 13 || b === 9).length / buf.length;
+        if (!best || ok > best.score) best = {rate, score: ok, n: buf.length};
+        if (ok > 0.97 && buf.length >= 16) break;
+      }
+    }
+  } finally { s.probing = false; msg(''); }
+  if (best && best.score > 0.9){
+    addLine(s, `Auto-detect: ${best.rate} baud (${(best.score * 100).toFixed(0)}% readable, ${best.n} bytes)`, 'sys');
+    return best.rate;
+  }
+  const fallback = pref > 0 ? pref : 115200;
+  addLine(s, `Auto-detect heard nothing readable — opening at ${fallback}. The board may only talk after you send something.`, 'sys');
+  return fallback;
+}
+
+async function connectSession(s){
+  if (s.open || s.probing || s.gone) return false;
+  s.wantOpen = true;
+  try {
+    const setting = s.baudSetting.trim().toLowerCase();
+    let baud;
+    if (s.port.wifi){ await s.port.open(); s.baud = 0; baud = 0; }
+    else if (setting === 'auto' || setting === '') baud = await autoBaud(s);
+    else { baud = parseInt(setting, 10); if (!(baud > 0)) throw new Error('Enter a baud rate or "auto"'); }
+    if (s.port.wifi) openWifi(s); else await openPort(s, baud);
+    msg('');
+    return true;
+  } catch (e) {
+    s.wantOpen = false; s.probing = false;
+    if (e.message !== 'cancelled'){ msg('Error: ' + e.message); addLine(s, 'Error: ' + e.message, 'sys'); }
+    renderAll();
+    return false;
+  }
+}
+
+$('btnConnect').onclick = async () => {
+  const s = cur; if (!s) return;
+  if (s.probing){ s.cancel = true; return; }
+  if (s.open) await closeSession(s, 'user'); else await connectSession(s);
+};
+$('baud').onchange = e => { if (cur) cur.baudSetting = e.target.value; };
+
+// open the port with a retry loop, used after re-plug / re-enumeration (the OS may still be enumerating)
+async function reconnectSoon(s){
+  const now = Date.now();
+  s.recon = s.recon.filter(t => now - t < 15000); s.recon.push(now);
+  if (s.recon.length > 4){ addLine(s, '— board keeps re-enumerating; auto-reconnect paused, press Connect —', 'sys'); return; }
+  for (let i = 0; i < 4 && !s.open && !s.gone; i++){
+    await sleep(i ? 700 : 500);
+    if (await connectSession(s)) return;
+  }
+}
+
+/* ---------------- port discovery ---------------- */
+function sessionFor(port){ return sessions.find(s => s.port === port); }
+async function refreshKnown(){
+  if (!navigator.serial) return;
+  for (const p of await navigator.serial.getPorts()) if (!sessionFor(p)) newSession(p);
+}
+const KNOWN_FILTERS = [...new Set([...Object.keys(VENDORS).map(Number)])].map(v => ({usbVendorId: v}));
+async function addBoard(any){
+  if (!navigator.serial) return;
+  try {
+    const p = await navigator.serial.requestPort(any ? {} : {filters: KNOWN_FILTERS});
+    const s = sessionFor(p) || newSession(p);
+    select(s);
+    if ($('optAuto').checked) connectSession(s);
+  } catch (e) {
+    if (e.name === 'NotFoundError') msg(any ? '' : 'No known board selected — use "Any port…" for unlisted devices.');
+    else msg('Error: ' + e.message);
+  }
+}
+$('btnAdd').onclick = () => addBoard(false);
+$('btnAddAny').onclick = () => addBoard(true);
+
+if (navigator.serial){
+  navigator.serial.addEventListener('connect', async e => {
+    const p = e.target;
+    if (sessionFor(p)) return;
+    const key = identify(p.getInfo()).key;
+    const old = sessions.find(s => s.gone && key && s.board.key === key);
+    let s, resume;
+    if (old){ s = old; s.port = p; s.gone = false; resume = old.wasOpen; renderAll(); }
+    else { s = newSession(p); resume = $('optAuto').checked; }
+    addLine(s, '— board plugged in —', 'sys');
+    if (resume && $('optAuto').checked && !s.busy) reconnectSoon(s);
+  });
+  navigator.serial.addEventListener('disconnect', async e => {
+    const s = sessionFor(e.target);
+    if (!s) return;
+    if (s.open) await closeSession(s, 'lost');
+    s.gone = true;
+    addLine(s, '— board unplugged —', 'sys');
+    renderAll();
+  });
+}
+
+/* ---------------- reset / bootloader / signals ---------------- */
+async function sig(s, o){ await s.port.setSignals(o); Object.assign(s.sigs, o); }
+async function resetBoard(s){
+  const f = fam(s);
+  if (f === 'esp' || f === 'bridge'){            // EN <- RTS
+    await sig(s, {dataTerminalReady:false, requestToSend:true}); await sleep(120);
+    await sig(s, {requestToSend:false});
+  }
+  if (f !== 'esp'){                              // AVR-style auto-reset: DTR edge through a capacitor
+    await sig(s, {dataTerminalReady:false}); await sleep(50);
+    await sig(s, {dataTerminalReady:true}); await sleep(120);
+    await sig(s, {dataTerminalReady:false});
+  }
+}
+async function enterBootloader(s){
+  const f = fam(s);
+  if (f === 'native' || f === 'rp2040'){
+    // opening and closing at 1200 baud tells the Arduino / pico core to reboot into its bootloader
+    if (s.open) await closeSession(s, 'quiet');
+    s.wasOpen = false; s.wantOpen = false;
+    await s.port.open({baudRate: 1200}); await sleep(150); await s.port.close();
+    addLine(s, '— 1200 bps touch sent; the board should reappear as a drive / bootloader device —', 'sys');
+    return;
+  }
+  await sig(s, {dataTerminalReady:false, requestToSend:true}); await sleep(120);   // EN low
+  await sig(s, {dataTerminalReady:true, requestToSend:false}); await sleep(60);    // IO0 low, release EN
+  await sig(s, {dataTerminalReady:false});
+  addLine(s, '— ESP download mode requested (look for "waiting for download") —', 'sys');
+}
+async function guarded(fn){
+  const s = cur; if (!s || s.busy) return;
+  s.busy = true; renderStrip();
+  try { await fn(s); msg(''); } catch (e) { msg('Error: ' + e.message); addLine(s, 'Error: ' + e.message, 'sys'); }
+  s.busy = false; renderAll();
+}
+$('btnReset').onclick = () => guarded(async s => { await resetBoard(s); addLine(s, '— reset —', 'sys'); });
+$('btnBoot').onclick = () => guarded(enterBootloader);
+for (const [id, key] of [['btnDtr','dataTerminalReady'],['btnRts','requestToSend']]){
+  $(id).onclick = async () => {
+    const s = cur; if (!s || !s.open) return;
+    try { await sig(s, {[key]: !s.sigs[key]}); renderStrip(); }
+    catch (e) { addLine(s, 'setSignals failed: ' + e.message, 'sys'); }
+  };
+}
+
+/* ---------------- sending ---------------- */
+const history = []; let histIdx = 0;
+$('send').onsubmit = async ev => {
+  ev.preventDefault();
+  const s = cur;
+  if (!s || !s.open || !s.port.writable) return;
+  const text = $('sendText').value;
+  const eol = $('eol').value.replace('\\n', '\n').replace('\\r', '\r');
+  try {
+    const w = s.port.writable.getWriter();
+    try { await w.write(new TextEncoder().encode(text + eol)); } finally { w.releaseLock(); }
+    addLine(s, '→ ' + text, 'tx');
+    if (text && history[history.length - 1] !== text) history.push(text);
+    histIdx = history.length; $('sendText').value = '';
+  } catch (e) { addLine(s, 'Write error: ' + e.message, 'sys'); }
+};
+$('sendText').onkeydown = e => {
+  if (e.key === 'ArrowUp' && history.length){ histIdx = Math.max(0, histIdx - 1); e.target.value = history[histIdx]; e.preventDefault(); }
+  if (e.key === 'ArrowDown' && history.length){ histIdx = Math.min(history.length, histIdx + 1); e.target.value = history[histIdx] || ''; e.preventDefault(); }
+};
+
+/* ---------------- monitor buttons ---------------- */
+function download(name, content, type){
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([content], {type}));
+  a.download = name; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$('optTs').onchange = e => $('monHost').classList.toggle('ts', e.target.checked);
+$('btnClearMon').onclick = () => {
+  const s = cur; if (!s) return;
+  for (const n of [...s.mon.children]) if (n !== s.pendEl) n.remove();
+  s.queue.length = 0; s.logLines.length = 0; s.pending = ''; s.dirtyMon = true;
+};
+$('btnSaveLog').onclick = () => { if (cur) download((cur.board.n.replace(/\W+/g, '-') || 'serial') + '-log.txt', cur.logLines.join('\n'), 'text/plain'); };
+$('btnAdv').onclick = () => $('adv').classList.toggle('show');
+document.querySelectorAll('[data-view]').forEach(b => b.onclick = () => {
+  document.querySelectorAll('[data-view]').forEach(x => x.classList.toggle('on', x === b));
+  $('main').className = b.dataset.view === 'split' ? '' : 'v-' + b.dataset.view;
+  dirtyPlot = true;
+});
+
+/* ---------------- plotter ---------------- */
+let dirtyPlot = true, hoverX = null, legendKey = '';
+const NUM = '-?\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?';
+const KV = new RegExp('([A-Za-z_]\\w*)\\s*[:=]\\s*(' + NUM + ')', 'g');
+const NUMS = new RegExp(NUM, 'g');
+
+function plotLine(s, line){
+  if (s.paused) return;
+  const v = {};
+  let found = false;
+  for (const m of line.matchAll(KV)){ v[m[1]] = parseFloat(m[2]); found = true; }
+  if (!found){
+    const nums = line.match(NUMS);
+    if (!nums) return;
+    nums.slice(0, 16).forEach((n, i) => v['ch' + (i + 1)] = parseFloat(n));
+  }
+  for (const k in v) if (!s.names.includes(k)) s.names.push(k);
+  s.rows.push(v);
+  if (s.rows.length > 60000) s.rows.splice(0, 10000);
+  if (s === cur) dirtyPlot = true;
+}
+function renderLegend(){
+  const lg = $('legend'); lg.textContent = '';
+  const s = cur;
+  legendKey = s ? s.id + ':' + s.names.join(',') : '';
+  if (!s || !s.names.length){
+    lg.appendChild(h('span', 'hint', 'Print lines like 12,34,56 or temp:23.5 hum:40 — each number becomes a trace.'));
+    return;
+  }
+  s.names.forEach((n, i) => {
+    const c = h('span', 'chip' + (s.hidden.has(n) ? ' off' : ''));
+    const dot = document.createElement('i'); dot.style.background = COLORS[i % COLORS.length];
+    const val = h('span', 'val'); val.dataset.n = n;
+    c.append(dot, n + ' ', val);
+    c.onclick = () => { s.hidden.has(n) ? s.hidden.delete(n) : s.hidden.add(n); renderLegend(); dirtyPlot = true; };
+    lg.appendChild(c);
+  });
+}
+function updateLegendValues(){
+  const s = cur; if (!s) return;
+  if (legendKey !== s.id + ':' + s.names.join(',')) renderLegend();
+  const last = s.rows[s.rows.length - 1] || {};
+  for (const e of $('legend').querySelectorAll('.val')) e.textContent = last[e.dataset.n] === undefined ? '' : last[e.dataset.n];
+}
+$('btnPause').onclick = () => { if (cur){ cur.paused = !cur.paused; renderStrip(); } };
+$('btnClearPlot').onclick = () => { const s = cur; if (!s) return; s.rows.length = 0; s.names.length = 0; s.hidden.clear(); renderLegend(); dirtyPlot = true; };
+$('btnCsv').onclick = () => {
+  const s = cur; if (!s || !s.rows.length) return;
+  const out = ['sample,' + s.names.join(',')];
+  s.rows.forEach((r, i) => out.push(i + ',' + s.names.map(n => r[n] === undefined ? '' : r[n]).join(',')));
+  download('serial-plot.csv', out.join('\n'), 'text/csv');
+};
+for (const id of ['win','ymin','ymax']) $(id).oninput = () => dirtyPlot = true;
+
+const cv = $('plot'), ctx = cv.getContext('2d');
+new ResizeObserver(() => {
+  const r = cv.getBoundingClientRect(), d = devicePixelRatio || 1;
+  cv.width = Math.max(1, r.width * d); cv.height = Math.max(1, r.height * d);
+  dirtyPlot = true;
+}).observe($('plotWrap'));
+cv.onmousemove = e => { hoverX = e.offsetX; dirtyPlot = true; };
+cv.onmouseleave = () => { hoverX = null; dirtyPlot = true; };
+
+function niceStep(range, n){
+  const raw = range / n, p = Math.pow(10, Math.floor(Math.log10(raw))), f = raw / p;
+  return (f < 1.5 ? 1 : f < 3.5 ? 2 : f < 7.5 ? 5 : 10) * p;
+}
+function css(v){ return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+function drawPlot(){
+  const d = devicePixelRatio || 1, W = cv.width / d, H = cv.height / d;
+  ctx.setTransform(d, 0, 0, d, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const L = 54, R = 12, T = 12, B = 22, w = W - L - R, h = H - T - B;
+  if (w < 20 || h < 20) return;
+  const s = cur, rows = s ? s.rows : [], names = s ? s.names : [], hidden = s ? s.hidden : new Set();
+  const N = Math.max(10, parseInt($('win').value, 10) || 500);
+  const vis = rows.slice(Math.max(0, rows.length - N));
+  const active = names.filter(n => !hidden.has(n));
+
+  let lo = Infinity, hi = -Infinity;
+  for (const r of vis) for (const n of active) if (r[n] !== undefined){ if (r[n] < lo) lo = r[n]; if (r[n] > hi) hi = r[n]; }
+  if (lo === Infinity){ lo = 0; hi = 1; }
+  if (lo === hi){ lo -= 1; hi += 1; }
+  const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
+  const ymin = $('ymin').value !== '' ? +$('ymin').value : lo;
+  const ymax = $('ymax').value !== '' ? +$('ymax').value : hi;
+  const span = (ymax - ymin) || 1;
+  const X = i => L + (N <= 1 ? 0 : (i + (N - vis.length)) / (N - 1) * w);
+  const Y = v => T + h - (v - ymin) / span * h;
+
+  ctx.font = '11px system-ui'; ctx.textBaseline = 'middle';
+  const step = niceStep(span, Math.max(2, h / 40));
+  ctx.strokeStyle = css('--line'); ctx.fillStyle = css('--dim'); ctx.lineWidth = 1; ctx.textAlign = 'right';
+  for (let v = Math.ceil(ymin / step) * step; v <= ymax; v += step){
+    const y = Math.round(Y(v)) + .5;
+    ctx.beginPath(); ctx.moveTo(L, y); ctx.lineTo(W - R, y); ctx.stroke();
+    ctx.fillText(+v.toPrecision(6) + '', L - 6, y);
+  }
+  ctx.strokeRect(L + .5, T + .5, w, h);
+  ctx.textAlign = 'center'; ctx.textBaseline = 'top';
+  ctx.fillText('older', L + 20, T + h + 6); ctx.fillText('latest', W - R - 16, T + h + 6);
+
+  ctx.save(); ctx.beginPath(); ctx.rect(L, T, w, h); ctx.clip();
+  ctx.lineWidth = 1.6; ctx.lineJoin = 'round';
+  names.forEach((n, ci) => {
+    if (hidden.has(n)) return;
+    ctx.strokeStyle = COLORS[ci % COLORS.length]; ctx.beginPath();
+    let pen = false;
+    vis.forEach((r, i) => {
+      if (r[n] === undefined){ pen = false; return; }
+      pen ? ctx.lineTo(X(i), Y(r[n])) : ctx.moveTo(X(i), Y(r[n])); pen = true;
+    });
+    ctx.stroke();
+  });
+  ctx.restore();
+
+  if (hoverX !== null && hoverX >= L && hoverX <= W - R && vis.length){
+    let i = Math.round((hoverX - L) / w * (N - 1)) - (N - vis.length);
+    i = Math.min(vis.length - 1, Math.max(0, i));
+    const x = X(i);
+    ctx.strokeStyle = css('--dim'); ctx.setLineDash([4, 4]);
+    ctx.beginPath(); ctx.moveTo(x, T); ctx.lineTo(x, T + h); ctx.stroke(); ctx.setLineDash([]);
+    const items = names.map((n, ci) => [n, ci]).filter(([n]) => !hidden.has(n) && vis[i][n] !== undefined);
+    if (items.length){
+      const bw = 110, bh = items.length * 16 + 8, bx = x + 10 + bw > W ? x - bw - 10 : x + 10;
+      ctx.fillStyle = css('--panel2'); ctx.strokeStyle = css('--line');
+      ctx.fillRect(bx, T + 6, bw, bh); ctx.strokeRect(bx + .5, T + 6.5, bw, bh);
+      ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+      items.forEach(([n, ci], k) => {
+        ctx.fillStyle = COLORS[ci % COLORS.length];
+        ctx.fillText(n + ': ' + vis[i][n], bx + 8, T + 18 + k * 16);
+      });
+    }
+  }
+}
+
+/* ---------------- ESP flashing (esptool-js) ---------------- */
+const ESPTOOL = 'https://cdn.jsdelivr.net/npm/esptool-js@0.5.4/bundle.js';
+const dlg = $('dlg');
+let espLib = null, flashing = false;
+function flog(t){ const e = $('flog'); e.textContent += t + (t.endsWith('\n') ? '' : '\n'); e.scrollTop = e.scrollHeight; }
+function toBinString(u8){
+  let out = '';
+  for (let i = 0; i < u8.length; i += 0x8000) out += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000));
+  return out;
+}
+$('btnFlash').onclick = () => { $('flog').textContent = ''; $('fprog').value = 0; dlg.showModal(); };
+$('fClose').onclick = () => { if (!flashing) dlg.close(); };
+dlg.addEventListener('cancel', e => { if (flashing) e.preventDefault(); });
+
+async function espSession(s, write){
+  if (flashing) return;
+  flashing = true; s.busy = true; $('fIdent').disabled = $('fGo').disabled = true; renderStrip();
+  const reopen = s.wantOpen || s.open;
+  let transport = null;
+  try {
+    let data = null, address = 0;
+    if (write){
+      const file = $('fFile').files[0];
+      if (!file) throw new Error('Choose a .bin file first');
+      const a = $('fAddr').value.trim();
+      address = /^0x/i.test(a) ? parseInt(a, 16) : parseInt(a, 10);
+      if (!Number.isFinite(address) || address < 0) throw new Error('Bad flash address');
+      data = toBinString(new Uint8Array(await file.arrayBuffer()));
+    }
+    if (s.open) await closeSession(s, 'quiet');
+    flog('Loading esptool-js…');
+    espLib = espLib || await import(ESPTOOL);
+    transport = new espLib.Transport(s.port, true);
+    const loader = new espLib.ESPLoader({
+      transport, baudrate: write ? +$('fBaud').value : 115200, romBaudrate: 115200,
+      terminal: { clean(){ $('flog').textContent = ''; }, writeLine(t){ flog(t); }, write(t){ flog(t); } }
+    });
+    const chip = await loader.main();
+    s.chip = String(chip).replace(/\s*\(.*$/, '') || String(chip);
+    s.fam = 'esp'; renderAll();
+    if (write){
+      await loader.writeFlash({
+        fileArray: [{data, address}], flashSize: 'keep', flashMode: 'keep', flashFreq: 'keep',
+        eraseAll: false, compress: true,
+        reportProgress: (i, written, total) => { $('fprog').value = Math.round(written / total * 100); }
+      });
+      flog('Done. Resetting board…');
+      if (typeof loader.after === 'function') await loader.after('hard_reset'); else await loader.hardReset();
+    }
+  } catch (e) {
+    flog('Error: ' + e.message);
+  } finally {
+    try { if (transport) await transport.disconnect(); } catch {}
+    flashing = false; s.busy = false; $('fIdent').disabled = $('fGo').disabled = false;
+    renderAll();
+    if (reopen){ await sleep(400); s.gone || connectSession(s); }
+  }
+}
+$('fIdent').onclick = () => cur && espSession(cur, false);
+$('fGo').onclick = () => cur && espSession(cur, true);
+
+
+/* ---------------- code editor: compile / upload / MicroPython ---------------- */
+// [label, fqbn]; the core is the first two parts of the fqbn
+const FQBNS = [
+  ['Arduino Uno','arduino:avr:uno'], ['Arduino Nano (new bootloader)','arduino:avr:nano:cpu=atmega328'],
+  ['Arduino Nano (old bootloader / clone)','arduino:avr:nano:cpu=atmega328old'], ['Arduino Mega 2560','arduino:avr:mega:cpu=atmega2560'],
+  ['Arduino Leonardo','arduino:avr:leonardo'], ['Arduino Micro','arduino:avr:micro'],
+  ['ESP32 Dev Module','esp32:esp32:esp32'], ['ESP32-S3 Dev Module','esp32:esp32:esp32s3'], ['ESP32-C3 Dev Module','esp32:esp32:esp32c3'],
+  ['ESP32-S2 Dev Module','esp32:esp32:esp32s2'], ['ESP8266 NodeMCU 1.0','esp8266:esp8266:nodemcuv2'],
+  ['Raspberry Pi Pico','rp2040:rp2040:rpipico']
+];
+const TEMPLATES = {
+  cpp: {
+    'Blink + serial': `void setup() {
+  Serial.begin(115200);
+  pinMode(LED_BUILTIN, OUTPUT);
+}
+
+void loop() {
+  static unsigned long n = 0;
+  digitalWrite(LED_BUILTIN, HIGH); delay(500);
+  digitalWrite(LED_BUILTIN, LOW);  delay(500);
+  Serial.print("tick "); Serial.println(n++);
+}
+`,
+    'Plot demo (sin / cos)': `// Each name:value pair becomes a trace in the Plotter.
+void setup() {
+  Serial.begin(115200);
+}
+
+void loop() {
+  float t = millis() / 1000.0;
+  Serial.print("sin:"); Serial.print(sin(t));
+  Serial.print(" cos:"); Serial.println(cos(t));
+  delay(20);
+}
+`,
+    'Echo (type in the monitor)': `void setup() {
+  Serial.begin(115200);
+  Serial.println("Type something and press Send");
+}
+
+void loop() {
+  while (Serial.available()) Serial.write(Serial.read());
+}
+`
+  },
+  mpy: {
+    'Print + plot demo': `import math, time
+
+t = 0
+while True:
+    print("sin:%.3f cos:%.3f" % (math.sin(t), math.cos(t)))
+    t += 0.1
+    time.sleep(0.05)
+`,
+    'Blink (GPIO 2 / onboard LED)': `from machine import Pin
+import time
+
+led = Pin(2, Pin.OUT)      # Pico: Pin("LED") or Pin(25)
+while True:
+    led.value(not led.value())
+    print("led", led.value())
+    time.sleep(0.5)
+`
+  }
+};
+const CORE_OF = f => f.split(':').slice(0, 2).join(':');
+let toolStatus = null, codeBusy = false;
+
+function fillSelect(sel, items){
+  sel.textContent = '';
+  for (const [label, val] of items) { const o = h('option', '', label); o.value = val; sel.appendChild(o); }
+}
+fillSelect($('cBoard'), FQBNS);
+function suggestFqbn(s){
+  const chip = (s.chip || '').toUpperCase(), n = s.board.n;
+  if (/S3/.test(chip)) return 'esp32:esp32:esp32s3';
+  if (/C3/.test(chip)) return 'esp32:esp32:esp32c3';
+  if (/S2/.test(chip)) return 'esp32:esp32:esp32s2';
+  if (/8266/.test(chip) || /ESP8266/.test(s.fw)) return 'esp8266:esp8266:nodemcuv2';
+  if (/Mega/.test(n)) return 'arduino:avr:mega:cpu=atmega2560';
+  if (/Leonardo/.test(n)) return 'arduino:avr:leonardo';
+  if (/Micro/.test(n)) return 'arduino:avr:micro';
+  if (/Uno/.test(n)) return 'arduino:avr:uno';
+  if (/Pico|RP2040/.test(n) || s.board.f === 'rp2040') return 'rp2040:rp2040:rpipico';
+  if (/S3/.test(n)) return 'esp32:esp32:esp32s3';
+  if (s.board.key === '1A86:7523') return 'arduino:avr:nano:cpu=atmega328old';
+  if (fam(s) === 'esp' || fam(s) === 'bridge') return 'esp32:esp32:esp32';
+  return 'arduino:avr:uno';
+}
+function syncCodeBoard(){ if (cur) $('cBoard').value = cur.fqbn || suggestFqbn(cur); }
+$('cBoard').onchange = e => { if (cur) cur.fqbn = e.target.value; };
+
+function lang(){ return $('cLang').value; }
+function loadTemplates(){
+  const l = lang();
+  fillSelect($('cTpl'), [['Templates…', ''], ...Object.keys(TEMPLATES[l]).map(k => [k, k])]);
+  $('code').value = store.get('code:' + l, Object.values(TEMPLATES[l])[0]);
+  $('cBoard').style.display = l === 'cpp' ? '' : 'none';
+  $('cCompile').style.display = l === 'cpp' ? '' : 'none';
+  $('cSaveMain').style.display = l === 'mpy' ? '' : 'none';
+  $('cUpload').textContent = l === 'cpp' ? 'Upload ▶' : 'Run ▶';
+  $('cUpload').title = l === 'cpp' ? 'Compile and upload to the selected board (Ctrl+Enter)' : 'Run on the connected board without saving (Ctrl+Enter)';
+  $('cFile').accept = l === 'cpp' ? '.ino,.cpp,.h,.txt' : '.py,.txt';
+  renderTool();
+}
+$('cLang').onchange = loadTemplates;
+$('cTpl').onchange = e => { const t = TEMPLATES[lang()][e.target.value]; if (t){ $('code').value = t; store.set('code:' + lang(), t); } e.target.value = ''; };
+$('code').oninput = () => store.set('code:' + lang(), $('code').value);
+$('code').onkeydown = e => {
+  const ta = e.target;
+  if (e.key === 'Tab'){
+    e.preventDefault();
+    ta.setRangeText('  ', ta.selectionStart, ta.selectionEnd, 'end'); ta.oninput();
+  } else if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)){
+    e.preventDefault(); $('cUpload').click();
+  }
+};
+$('cOpen').onclick = () => $('cFile').click();
+$('cFile').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  $('code').value = await f.text(); $('code').oninput(); e.target.value = '';
+};
+$('cSave').onclick = () => download(lang() === 'cpp' ? 'sketch.ino' : 'main.py', $('code').value, 'text/plain');
+
+/* server API (compile / upload need server.py; the rest of the page works without it) */
+const api = (path, body) => fetch(path, {
+  method: body ? 'POST' : 'GET', headers: {'X-Dev-Board': '1', 'Content-Type': 'application/json'},
+  body: body ? JSON.stringify(body) : undefined
+});
+async function streamJob(path, body){
+  const out = $('cOut'); out.textContent = '';
+  const r = await api(path, body);
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'server error ' + r.status);
+  const rd = r.body.getReader(), dec = new TextDecoder('utf-8');
+  let all = '';
+  for (;;){
+    const {value, done} = await rd.read(); if (done) break;
+    const t = dec.decode(value, {stream:true}); all += t;
+    out.textContent += t.replace(/\n?::exit -?\d+\n?/, '\n'); out.scrollTop = out.scrollHeight;
+  }
+  const m = /::exit (-?\d+)/.exec(all);
+  return {code: m ? +m[1] : -1, text: all};
+}
+async function loadToolStatus(){
+  try { toolStatus = await (await api('/api/status')).json(); } catch { toolStatus = null; }
+  renderTool();
+  if (typeof renderAi === 'function') renderAi();
+}
+function renderTool(){
+  $('cInstall').style.display = 'none'; $('cCore').style.display = 'none';
+  if (lang() === 'mpy'){ $('cTool').textContent = 'Needs a board running MicroPython, connected in the monitor.'; return; }
+  if (!toolStatus){ $('cTool').textContent = 'Start server.py to compile / upload (python server.py, then open http://localhost:8080).'; return; }
+  if (!toolStatus.cli){ $('cTool').textContent = 'arduino-cli not found.'; $('cInstall').style.display = ''; return; }
+  $('cTool').textContent = 'arduino-cli ' + toolStatus.version;
+}
+$('cInstall').onclick = async () => {
+  if (codeBusy) return; codeBusy = true;
+  try { await streamJob('/api/install-cli', {}); } catch (e) { $('cOut').textContent = e.message; }
+  codeBusy = false; loadToolStatus();
+};
+$('cCore').onclick = async () => {
+  if (codeBusy) return; codeBusy = true;
+  const id = CORE_OF($('cBoard').value);
+  try {
+    const r = await streamJob('/api/core', {id});
+    $('cTool').textContent = r.code ? 'Core install failed' : 'Core ' + id + ' installed — compile again';
+    $('cCore').style.display = r.code ? '' : 'none';
+  } catch (e) { $('cOut').textContent = e.message; }
+  codeBusy = false;
+};
+
+// find the OS port name of a board by its USB id
+async function portFor(s){
+  const list = (await (await api('/api/ports')).json()).ports || [];
+  const hit = list.filter(p => p.vid && (p.vid + ':' + p.pid) === s.board.key);
+  if (hit.length) return hit[0].address;
+  if (list.length === 1) return list[0].address;
+  throw new Error('Cannot tell which COM port is this board (found: ' + (list.map(p => p.address).join(', ') || 'none') + ')');
+}
+
+async function cppRun(upload){
+  if (codeBusy) return;
+  if (!toolStatus || !toolStatus.cli){ msg('Compile needs server.py and arduino-cli — see the hint below the editor.'); return; }
+  const s = cur, fqbn = $('cBoard').value;
+  if (upload && !s){ msg('Select a board first (left panel).'); return; }
+  codeBusy = true; msg('');
+  $('cCompile').disabled = $('cUpload').disabled = true;
+  let wasOpen = false;
+  try {
+    let port = null;
+    if (upload){
+      port = await portFor(s);
+      wasOpen = s.open || s.wantOpen;
+      s.busy = true;
+      if (s.open) await closeSession(s, 'quiet');      // free the port for the uploader
+      s.wasOpen = wasOpen; s.wantOpen = false;
+      const m = /Serial\d?\.begin\(\s*(\d+)/.exec($('code').value);
+      s.baudSetting = m ? m[1] : 'auto';
+      renderAll();
+    }
+    const r = await streamJob('/api/run', {fqbn, code: $('code').value, port});
+    if (r.code === 0) $('cTool').textContent = upload ? 'Uploaded ✓' : 'Compiled ✓';
+    else {
+      $('cTool').textContent = 'Failed (exit ' + r.code + ')';
+      if (s && upload) s.wasOpen = false;
+      if (/platform not installed|Platform .* not found|Unknown FQBN|Error resolving FQBN/i.test(r.text)){
+        $('cCore').style.display = ''; $('cCore').textContent = 'Install core ' + CORE_OF(fqbn);
+      }
+    }
+  } catch (e) {
+    msg('Error: ' + e.message); $('cOut').textContent = e.message;
+    if (s) s.wasOpen = false;
+  }
+  $('cCompile').disabled = $('cUpload').disabled = false;
+  codeBusy = false;
+  if (upload && s){
+    s.busy = false; renderAll();
+    if (wasOpen && s.wasOpen && $('optAuto').checked){ await sleep(1200); if (!s.open && !s.gone) reconnectSoon(s); }
+  }
+}
+
+// MicroPython: talk to the REPL over the existing serial connection
+async function mpSend(s, str){
+  const w = s.port.writable.getWriter();
+  try {
+    const bytes = new TextEncoder().encode(str);
+    for (let i = 0; i < bytes.length; i += 128){ await w.write(bytes.subarray(i, i + 128)); await sleep(15); }
+  } finally { w.releaseLock(); }
+}
+async function mpRun(save){
+  const s = cur;
+  if (!s || !s.open){ msg('Connect to a MicroPython board first.'); return; }
+  msg('');
+  try {
+    await mpSend(s, '\x03\x03'); await sleep(200);          // interrupt whatever is running
+    await mpSend(s, '\x05'); await sleep(100);              // paste mode
+    if (save){
+      await mpSend(s, `open('main.py','w').write(${JSON.stringify($('code').value)})\r`);
+      await mpSend(s, '\x04'); await sleep(400);
+      await mpSend(s, '\x04');                              // soft reset: runs main.py
+      addLine(s, '→ saved main.py and restarted', 'tx');
+    } else {
+      await mpSend(s, $('code').value.replace(/\r?\n/g, '\r') + '\r');
+      await mpSend(s, '\x04');
+      addLine(s, '→ running script', 'tx');
+    }
+  } catch (e) { msg('Error: ' + e.message); }
+}
+$('cCompile').onclick = () => cppRun(false);
+$('cUpload').onclick = () => lang() === 'cpp' ? cppRun(true) : mpRun(false);
+$('cSaveMain').onclick = () => mpRun(true);
+
+/* ---------------- AI code generation (Claude, via the local server) ---------------- */
+let aiPrev = null, aiBusy = false;
+function codeFromReply(text){
+  const m = /```[^\n]*\n([\s\S]*?)(?:```|$)/.exec(text);
+  return m ? m[1].replace(/\n$/, '') + '\n' : null;
+}
+function renderAi(){
+  const ok = !!(toolStatus && toolStatus.ai);
+  $('aiKeyBtn').textContent = ok ? 'Key ✓' : 'Key';
+  $('aiGo').title = toolStatus ? (ok ? 'Model: ' + toolStatus.model : 'Set your API key first') : 'Start server.py first';
+}
+$('aiKeyBtn').onclick = () => { const b = $('aiKeyBar'); b.style.display = b.style.display === 'none' ? '' : 'none'; };
+$('aiKeySave').onclick = async () => {
+  try {
+    const r = await api('/api/ai-key', {key: $('aiKey').value, remember: $('aiRemember').checked});
+    if (!r.ok) throw new Error((await r.json()).error);
+    $('aiKey').value = ''; $('aiKeyBar').style.display = 'none'; msg('');
+    await loadToolStatus();
+  } catch (e) { msg('Error: ' + e.message); }
+};
+$('aiKeyClear').onclick = async () => { await api('/api/ai-key/clear', {}); await loadToolStatus(); };
+$('aiUndo').onclick = () => { if (aiPrev !== null){ $('code').value = aiPrev; $('code').oninput(); aiPrev = null; $('aiUndo').style.display = 'none'; } };
+async function aiGenerate(){
+  if (aiBusy) return;
+  const prompt = $('aiPrompt').value.trim();
+  if (!prompt){ msg('Describe what you want first.'); return; }
+  if (!toolStatus){ msg('AI needs server.py running.'); return; }
+  if (!toolStatus.ai){ $('aiKeyBar').style.display = ''; msg('Enter your Anthropic API key first.'); return; }
+  aiBusy = true; $('aiGo').disabled = true; $('aiGo').textContent = 'Writing…'; msg('');
+  const before = $('code').value;
+  let log = '';
+  if ($('aiCtx').checked){
+    if (cur) log += cur.logLines.slice(-40).join('\n');
+    const o = $('cOut').textContent.trim();
+    if (o) log += '\n' + o.slice(-3000);
+  }
+  try {
+    const r = await api('/api/ai', {prompt, code: before, lang: lang() === 'cpp' ? 'Arduino C++' : 'MicroPython',
+      board: lang() === 'cpp' ? $('cBoard').selectedOptions[0].textContent : (cur ? cur.board.n : ''), log});
+    if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'server error ' + r.status);
+    const rd = r.body.getReader(), dec = new TextDecoder();
+    let all = '';
+    for (;;){
+      const {value, done} = await rd.read(); if (done) break;
+      all += dec.decode(value, {stream:true});
+      const c = codeFromReply(all.replace(/\n?::exit -?\d+\n?/, ''));
+      if (c){ if (aiPrev === null) aiPrev = before; $('code').value = c; }
+    }
+    const err = /Error: (.*)/.exec(all.slice(all.lastIndexOf('\n', all.length - 12)));
+    if (/::exit [^0]/.test(all)) throw new Error(err ? err[1] : 'generation failed');
+    if (!codeFromReply(all)) throw new Error('No code came back — try rephrasing.');
+    $('code').oninput();
+    $('aiUndo').style.display = aiPrev === null ? 'none' : '';
+    $('cTool').textContent = 'Generated — review it, then Compile / Upload';
+  } catch (e) { msg('Error: ' + e.message); if (aiPrev !== null) $('aiUndo').style.display = ''; }
+  aiBusy = false; $('aiGo').disabled = false; $('aiGo').textContent = 'Generate';
+}
+$('aiGo').onclick = aiGenerate;
+$('aiPrompt').onkeydown = e => { if (e.key === 'Enter'){ e.preventDefault(); aiGenerate(); } };
+loadTemplates();
+loadToolStatus();
+
+/* ---------------- render loop ---------------- */
+let lastRx = 0, lastTick = performance.now(), lastSel = null;
+function frame(now){
+  for (const s of sessions) flushMonitor(s);
+  if (dirtyPlot){ dirtyPlot = false; drawPlot(); }
+  if (now - lastTick > 500){
+    updateLegendValues();
+    if (cur !== lastSel){ lastSel = cur; lastRx = cur ? cur.rxBytes : 0; }
+    const bps = cur ? (cur.rxBytes - lastRx) / ((now - lastTick) / 1000) : 0;
+    $('rate').textContent = cur && cur.open ? `${(bps / 1024).toFixed(1)} KB/s · ${cur.rxBytes} B` : '';
+    if (cur) lastRx = cur.rxBytes;
+    lastTick = now;
+  }
+  requestAnimationFrame(frame);
+}
+
+/* ---------------- start-up ---------------- */
+$('optAuto').checked = store.get('auto', '1') === '1';
+$('optAuto').onchange = e => store.set('auto', e.target.checked ? '1' : '0');
+(async () => {
+  renderAll(); renderLegend();
+  requestAnimationFrame(frame);
+  try { await refreshKnown(); } catch (e) { msg('Error: ' + e.message); }
+  try { for (const w of JSON.parse(store.get('wifi', '[]'))) addWifi(w.host, w.tcp, false).port.id = w.id; } catch {}
+  scanWifi(true);
+  if ($('optAuto').checked) for (const s of sessions) connectSession(s);   // already-allowed boards: connect without a dialog
+})();
+</script>
+</body>
+</html>
