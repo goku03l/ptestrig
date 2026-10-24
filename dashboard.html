@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Motor Logger Dashboard</title>
+<title>Peltier Thermal Cycling Dashboard</title>
 <style>
   :root {
     --bg:#f5f6f8; --card:#fff; --text:#1c2230; --muted:#6b7385; --line:#e2e5ec; --grid:#eceef3;
@@ -65,7 +65,7 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>Motor Logger</h1>
+    <h1>Peltier Thermal Cycling Test</h1>
     <div style="display:flex;gap:8px;flex-wrap:wrap">
       <span class="pill" id="board"><span class="dot"></span><span id="boardTxt">Board: waiting…</span></span>
       <span class="pill" id="link"><span class="dot"></span><span id="linkTxt">Cloud: connecting…</span></span>
@@ -76,18 +76,18 @@
 
   <div id="viewDash">
   <section class="tiles">
-    <div class="tile"><div class="k">Motor</div><div class="v" id="tMotor">–</div><div class="s" id="tMode"></div></div>
-    <div class="tile"><div class="k">PWM</div><div class="v"><span id="tPwm">–</span><small>%</small></div></div>
-    <div class="tile"><div class="k">Current</div><div class="v"><span id="tA">–</span><small>A</small></div><div class="s" id="tLR"></div></div>
+    <div class="tile"><div class="k">Peltier state</div><div class="v" id="tMotor">–</div><div class="s" id="tMode"></div></div>
+    <div class="tile"><div class="k">Drive power</div><div class="v"><span id="tPwm">–</span><small>%</small></div></div>
+    <div class="tile"><div class="k">Peltier current</div><div class="v"><span id="tA">–</span><small>A</small></div><div class="s" id="tLR"></div></div>
     <div class="tile"><div class="k">Temp 1</div><div class="v"><span id="tT1">–</span><small>°C</small></div></div>
     <div class="tile"><div class="k">Temp 2</div><div class="v"><span id="tT2">–</span><small>°C</small></div></div>
     <div class="tile"><div class="k">SD card</div><div class="v" id="tSd">–</div></div>
     <div class="tile"><div class="k">WiFi signal</div><div class="v"><span id="tRssi">–</span><small>dBm</small></div></div>
-    <div class="tile"><div class="k">Board uptime</div><div class="v" id="tUp">–</div><div class="s" id="tTime"></div></div>
+    <div class="tile"><div class="k">Rig uptime</div><div class="v" id="tUp">–</div><div class="s" id="tTime"></div></div>
   </section>
 
   <section class="charts">
-    <div class="chart"><h2>Current <span class="lg"><i style="background:var(--c-cur)"></i>A</span> <span class="lg"><i style="background:var(--c-pwm)"></i>PWM %</span></h2><canvas id="c1"></canvas></div>
+    <div class="chart"><h2>Drive current &amp; power <span class="lg"><i style="background:var(--c-cur)"></i>Current A</span> <span class="lg"><i style="background:var(--c-pwm)"></i>Drive %</span></h2><canvas id="c1"></canvas></div>
     <div class="chart"><h2>Temperature <span class="lg"><i style="background:var(--c-t1)"></i>Temp 1 °C</span> <span class="lg"><i style="background:var(--c-t2)"></i>Temp 2 °C</span></h2><canvas id="c2"></canvas></div>
   </section>
 
@@ -193,8 +193,8 @@ function onData(m, retained) {
 function render() {
   const m = last;
   if (!m) return;
-  $('tMotor').textContent = m.dir > 0 ? 'Forward' : m.dir < 0 ? 'Reverse' : 'Stopped';
-  $('tMode').textContent = m.mode + ' mode';
+  $('tMotor').textContent = m.dir > 0 ? 'Heating' : m.dir < 0 ? 'Cooling' : 'Dwell / off';
+  $('tMode').textContent = m.mode === 'AUTO' ? 'Auto thermal cycle' : 'Manual control';
   $('tPwm').textContent = m.pwm.toFixed(1);
   $('tA').textContent = m.a.toFixed(2);
   $('tLR').textContent = 'R ' + m.ir.toFixed(2) + ' · L ' + m.il.toFixed(2);
@@ -271,7 +271,7 @@ $('csv').onclick = () => {
   for (const r of rows) { const m = r.raw; out.push([m.time, m.pwm, m.dir, m.a, m.ir, m.il, m.t1 ?? '', m.t2 ?? ''].join(',')); }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([out.join('\n')], { type: 'text/csv' }));
-  a.download = 'motor_dashboard_' + new Date().toISOString().replace(/[:.]/g, '-') + '.csv';
+  a.download = 'peltier_cycle_' + new Date().toISOString().replace(/[:.]/g, '-') + '.csv';
   a.click();
 };
 

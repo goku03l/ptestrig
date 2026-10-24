@@ -1,4 +1,4 @@
-"""AI monitor for the motor logger: watches the live MQTT stream, lets Claude judge it, alerts on Telegram.
+"""AI monitor for the Peltier thermal-cycling test rig: watches the live MQTT stream, lets Claude judge it, alerts on Telegram.
 
     pip install paho-mqtt anthropic
     python monitor.py
@@ -238,17 +238,17 @@ REPORT_TOOL = {
 
 HANDLERS = {'get_series': tool_get_series, 'get_stats': tool_get_stats, 'compare_windows': tool_compare, 'save_notes': tool_save_notes}
 
-SYSTEM = """You are the resident monitoring engineer for a motor test bench, acting as data analyst, signal analyst and hardware specialist in one.
+SYSTEM = """You are the resident monitoring engineer for a Peltier (thermoelectric) thermal-cycling test rig, acting as data analyst, signal analyst and hardware specialist in one.
 
-The rig (ESP32 firmware): an IBT-2 / BTS7960 H-bridge drives a DC motor. PWM 0-100 %, direction 1 = forward (RPWM), -1 = reverse (LPWM), 0 = stopped.
+The rig (ESP32 firmware): an IBT-2 / BTS7960 H-bridge drives a Peltier module. PWM 0-100 % is the drive power; the bridge polarity sets the heat-pump direction: direction 1 = forward (RPWM, taken as heating), -1 = reverse (LPWM, taken as cooling), 0 = off/dwell. Which polarity actually heats depends on wiring, so infer it from the temperature response.
 Current is sensed from the driver's R_IS and L_IS pins, each through a 10k/10k divider into the ESP32 ADC (ADC_11db, about 0-3.1 V usable), scaled by a rough constant; 'a' is ir + il.
 Two 10k NTC thermistors (beta 3950, fixed series resistor) give t1 and t2 in deg C; null means the wire is open/shorted. The ESP32 runs an automatic ramp cycle
-(forward ramp up, hold, ramp down, pause, then the same in reverse) unless someone sent manual commands. Data arrives about once per second over WiFi via MQTT; 'sd' says whether the SD card is logging.
+(a heating half-cycle: ramp up, hold, ramp down, dwell; then the same in the cooling polarity) unless someone sent manual commands. The thermistor positions (hot side, cold side, plate, ambient) are not stated: work out what each probe tracks from how it responds. Expect temperature to lag behind drive power (thermal mass), cycle repeatability, and the hot/cold spread to track current. Data arrives about once per second over WiFi via MQTT; 'sd' says whether the SD card is logging.
 
 You have NO fixed thresholds. Decide what is abnormal by reasoning about the physics and the data: learn this rig's normal from the history and your notes, then look for anything wrong or changing.
 Think about: values that do not respond when they should (stuck or saturated sensors, zero variance, current that ignores PWM), physically implausible numbers, drift and trends, asymmetry between R and L,
-relationships that broke (current vs PWM, temperature vs load and its rate of rise), noise or spikes, dropouts and gaps, WiFi signal degradation, SD card trouble, the motor not following the expected cycle, and anything else a careful engineer would notice.
-Also consider that the sensor or calibration may be at fault rather than the motor: say which you suspect and why.
+relationships that broke (current vs drive power, temperature vs load and its rate of rise), noise or spikes, dropouts and gaps, WiFi signal degradation, SD card trouble, the Peltier not following the expected thermal cycle (e.g. no temperature swing despite current, loss of dwell stability, cycle-to-cycle drift, thermal runaway, a hot side that cannot shed heat), and anything else a careful engineer would notice.
+Also consider that the sensor or calibration may be at fault rather than the Peltier module or its cooling path: say which you suspect and why.
 
 Method: read the digest, pull whatever extra data you need with the tools (use several, compare windows), then call report exactly once. Be concrete: cite numbers and times, give a diagnosis with your confidence, and the most likely physical checks.
 Do not repeat an issue already in 'recent alerts' unless it changed, worsened or is newly urgent; if it is unchanged, report ok. Keep your notes up to date with save_notes when you learn something about normal behaviour or open concerns.
@@ -398,7 +398,7 @@ def main():
     c.loop_start()
     if TG_TOKEN and TG_CHAT:
         threading.Thread(target=tg_listen, daemon=True).start()
-        tg_send('Motor monitor started. I will message you when I see something wrong. Send /help for commands.')
+        tg_send('Peltier test monitor started. I will message you when I see something wrong. Send /help for commands.')
     state['next_check'] = time.time() + 90
     log('monitor running; first check in ~90 s')
     while True:
