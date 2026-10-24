@@ -132,14 +132,14 @@ const $ = id => document.getElementById(id);
 let rows = [];            // {t:ms, pwm, a, t1, t2, raw}
 let rangeMs = 30 * 60 * 1000;   // chart window; 0 = all stored
 // Thermal cycle counter: every heating<->cooling reversal (dwell ignored) is one cycle.
-// 67 = reversals found in the logs/*.csv recorded before this counter existed.
-const CYC_BASE = 67;
+// 1168 = 4h13m10s of auto running (15190 s) / 13 s per heat-or-cool phase.
+const CYC_BASE = 1168;
 let cyc = { n: CYC_BASE, dir: 0 };
-try { const c = JSON.parse(localStorage.getItem('cycles')); if (c && c.n >= 0) cyc = c; } catch (e) {}
+try { const c = JSON.parse(localStorage.getItem('cycles2')); if (c && c.n >= 0) cyc = c; } catch (e) {}
 function cycUpdate(dir) {
   if (dir === 0) return;
-  if (cyc.dir && dir !== cyc.dir) { cyc.n++; try { localStorage.setItem('cycles', JSON.stringify(cyc)); } catch (e) {} }
-  if (dir !== cyc.dir) { cyc.dir = dir; try { localStorage.setItem('cycles', JSON.stringify(cyc)); } catch (e) {} }
+  if (cyc.dir && dir !== cyc.dir) { cyc.n++; try { localStorage.setItem('cycles2', JSON.stringify(cyc)); } catch (e) {} }
+  if (dir !== cyc.dir) { cyc.dir = dir; try { localStorage.setItem('cycles2', JSON.stringify(cyc)); } catch (e) {} }
 }
 let last = null, lastAt = 0, online = null;
 
@@ -357,7 +357,7 @@ $('cycSet').onclick = e => {
   e.preventDefault();
   const v = prompt('Set total thermal cycles done so far:', cyc.n);
   if (v === null || isNaN(+v) || +v < 0) return;
-  cyc.n = Math.floor(+v); try { localStorage.setItem('cycles', JSON.stringify(cyc)); } catch (err) {}
+  cyc.n = Math.floor(+v); try { localStorage.setItem('cycles2', JSON.stringify(cyc)); } catch (err) {}
   $('tCyc').textContent = cyc.n;
 };
 tick();
