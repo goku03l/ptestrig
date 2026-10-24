@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Motor Logger Dashboard</title>
+<style>
+  :root {
+    --bg:#f5f6f8; --card:#fff; --text:#1c2230; --muted:#6b7385; --line:#e2e5ec; --grid:#eceef3;
+    --ok:#1a8f4c; --bad:#c93a3a; --warn:#c98a1a;
+    --c-pwm:#2b6cdf; --c-cur:#d9482b; --c-t1:#1a8f4c; --c-t2:#8a4fd0;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#12151c; --card:#1b2029; --text:#e8ebf2; --muted:#8c95a8; --line:#2a3140; --grid:#242a37;
+            --ok:#3ac47a; --bad:#ef6a6a; --warn:#e5ae4a;
+            --c-pwm:#6ea0ff; --c-cur:#ff8566; --c-t1:#46d08a; --c-t2:#b88af0; }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif; }
+  .wrap { max-width:1100px; margin:0 auto; padding:16px; }
+  header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:16px; }
+  h1 { font-size:20px; margin:0; }
+  .pill { display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border-radius:999px; background:var(--card); border:1px solid var(--line); font-weight:600; }
+  .dot { width:10px; height:10px; border-radius:50%; background:var(--muted); }
+  .on .dot { background:var(--ok); box-shadow:0 0 0 4px color-mix(in srgb, var(--ok) 25%, transparent); }
+  .off .dot { background:var(--bad); }
+  .stale .dot { background:var(--warn); }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; margin-bottom:16px; }
+  .tile { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .tile .k { color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.04em; }
+  .tile .v { font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:2px; }
+  .tile .v small { font-size:13px; font-weight:500; color:var(--muted); margin-left:3px; }
+  .tile .s { color:var(--muted); font-size:12px; margin-top:2px; min-height:1em; }
+  .charts { display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); gap:12px; }
+  @media (max-width:520px) { .charts { grid-template-columns:1fr; } }
+  .chart { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
+  .chart h2 { font-size:13px; margin:0 0 8px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
+  .chart h2 span.lg { font-weight:500; color:var(--muted); display:inline-flex; align-items:center; gap:5px; }
+  .chart h2 i { width:10px; height:3px; border-radius:2px; display:inline-block; }
+  canvas { width:100%; height:200px; display:block; }
+  footer { color:var(--muted); font-size:12px; margin-top:16px; display:flex; flex-wrap:wrap; gap:8px 20px; align-items:center; }
+  button { font:inherit; padding:5px 12px; border-radius:8px; border:1px solid var(--line); background:var(--card); color:var(--text); cursor:pointer; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Motor Logger</h1>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <span class="pill" id="board"><span class="dot"></span><span id="boardTxt">Board: waiting…</span></span>
+      <span class="pill" id="link"><span class="dot"></span><span id="linkTxt">Cloud: connecting…</span></span>
+    </div>
+  </header>
+
+  <section class="tiles">
+    <div class="tile"><div class="k">Motor</div><div class="v" id="tMotor">–</div><div class="s" id="tMode"></div></div>
+    <div class="tile"><div class="k">PWM</div><div class="v"><span id="tPwm">–</span><small>%</small></div></div>
+    <div class="tile"><div class="k">Current</div><div class="v"><span id="tA">–</span><small>A</small></div><div class="s" id="tLR"></div></div>
+    <div class="tile"><div class="k">Temp 1</div><div class="v"><span id="tT1">–</span><small>°C</small></div></div>
+    <div class="tile"><div class="k">Temp 2</div><div class="v"><span id="tT2">–</span><small>°C</small></div></div>
+    <div class="tile"><div class="k">SD card</div><div class="v" id="tSd">–</div></div>
+    <div class="tile"><div class="k">WiFi signal</div><div class="v"><span id="tRssi">–</span><small>dBm</small></div></div>
+    <div class="tile"><div class="k">Board uptime</div><div class="v" id="tUp">–</div><div class="s" id="tTime"></div></div>
+  </section>
+
+  <section class="charts">
+    <div class="chart"><h2>Current <span class="lg"><i style="background:var(--c-cur)"></i>A</span> <span class="lg"><i style="background:var(--c-pwm)"></i>PWM %</span></h2><canvas id="c1"></canvas></div>
+    <div class="chart"><h2>Temperature <span class="lg"><i style="background:var(--c-t1)"></i>Temp 1 °C</span> <span class="lg"><i style="background:var(--c-t2)"></i>Temp 2 °C</span></h2><canvas id="c2"></canvas></div>
+  </section>
+
+  <footer>
+    <span id="count">0 samples this session</span>
+    <button id="csv">Download CSV</button>
+    <button id="clear">Clear history</button>
+    <span>History is kept in this browser tab only (last 30 min).</span>
+  </footer>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/mqtt@5.3.4/dist/mqtt.min.js"></script>
+<script>
+// Must match MQTT_TOPIC in the ESP32 sketch.
+const TOPIC  = 'remster-hq/motor-logger-7f3a9c1e5b24';
+const BROKER = 'wss://broker.hivemq.com:8884/mqtt';
+const KEEP_MS = 30 * 60 * 1000;
+const STALE_MS = 6000;
+
+const $ = id => document.getElementById(id);
+let rows = [];            // {t:ms, pwm, a, t1, t2, raw}
+let last = null, lastAt = 0, online = null;
+
+function setPill(el, txt, cls, label) {
+  $(el).className = 'pill ' + cls; $(txt).textContent = label;
+}
+
+function fmtUp(s) {
+  const d = Math.floor(s / 86400), h = Math.floor(s % 86400 / 3600), m = Math.floor(s % 3600 / 60);
+  return (d ? d + 'd ' : '') + (h ? h + 'h ' : '') + m + 'm ' + (s % 60) + 's';
+}
+
+function onData(m, retained) {
+  last = m;
+  if (retained) { lastAt = Date.now() - 60000; render(); return; }   // old snapshot from the broker, not live
+  lastAt = Date.now();
+  rows.push({ t: lastAt, pwm: m.pwm, a: m.a, t1: m.t1, t2: m.t2, raw: m });
+  const cut = lastAt - KEEP_MS;
+  while (rows.length && rows[0].t < cut) rows.shift();
+  render();
+}
+
+function render() {
+  const m = last;
+  if (!m) return;
+  $('tMotor').textContent = m.dir > 0 ? 'Forward' : m.dir < 0 ? 'Reverse' : 'Stopped';
+  $('tMode').textContent = m.mode + ' mode';
+  $('tPwm').textContent = m.pwm.toFixed(1);
+  $('tA').textContent = m.a.toFixed(2);
+  $('tLR').textContent = 'R ' + m.ir.toFixed(2) + ' · L ' + m.il.toFixed(2);
+  $('tT1').textContent = m.t1 == null ? 'no sensor' : m.t1.toFixed(1);
+  $('tT2').textContent = m.t2 == null ? 'no sensor' : m.t2.toFixed(1);
+  $('tSd').textContent = m.sd ? 'Logging' : 'Not logging';
+  $('tSd').style.color = m.sd ? 'var(--ok)' : 'var(--bad)';
+  $('tRssi').textContent = m.rssi;
+  $('tUp').textContent = fmtUp(m.up);
+  $('tTime').textContent = m.time;
+  $('count').textContent = rows.length + ' samples this session';
+  draw();
+}
+
+function tick() {
+  const age = Date.now() - lastAt;
+  if (online === false) setPill('board', 'boardTxt', 'off', 'Board: offline');
+  else if (!last) setPill('board', 'boardTxt', 'stale', 'Board: waiting for data…');
+  else if (age > STALE_MS) setPill('board', 'boardTxt', 'stale', 'Board: no data for ' + Math.round(age / 1000) + ' s');
+  else setPill('board', 'boardTxt', 'on', 'Board: online');
+}
+setInterval(tick, 1000);
+
+// ---- charts (plain canvas) ----
+function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+
+function lineChart(cv, series, unitsRight) {
+  const dpr = devicePixelRatio || 1, W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const g = cv.getContext('2d'); g.scale(dpr, dpr);
+  const L = 40, R = 12, T = 8, B = 20, w = W - L - R, h = H - T - B;
+  const now = Date.now(), span = Math.min(KEEP_MS, Math.max(60000, now - (rows[0]?.t ?? now)));
+  const t0 = now - span;
+  g.font = '11px system-ui'; g.fillStyle = css('--muted'); g.strokeStyle = css('--grid'); g.lineWidth = 1;
+  let lo = Infinity, hi = -Infinity;
+  for (const s of series) for (const r of rows) { const v = r[s.key]; if (v != null) { lo = Math.min(lo, v); hi = Math.max(hi, v); } }
+  if (!isFinite(lo)) { lo = 0; hi = 1; }
+  if (hi - lo < 1) { const c = (hi + lo) / 2; lo = c - .5; hi = c + .5; }
+  const pad = (hi - lo) * .08; lo -= pad; hi += pad;
+  const X = t => L + (t - t0) / span * w, Y = v => T + (1 - (v - lo) / (hi - lo)) * h;
+  for (let i = 0; i <= 4; i++) {
+    const v = lo + (hi - lo) * i / 4, y = Y(v);
+    g.beginPath(); g.moveTo(L, y); g.lineTo(W - R, y); g.stroke();
+    g.textAlign = 'right'; g.fillText(v.toFixed(Math.abs(hi - lo) < 5 ? 1 : 0), L - 6, y + 4);
+  }
+  g.textAlign = 'center';
+  for (let i = 0; i <= 3; i++) {
+    const t = t0 + span * i / 3, d = new Date(t);
+    g.fillText(d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: span < 600000 ? '2-digit' : undefined }), L + w * i / 3, H - 5);
+  }
+  for (const s of series) {
+    g.strokeStyle = css(s.color); g.lineWidth = 2; g.lineJoin = 'round'; g.beginPath();
+    let pen = false, prev = 0;
+    for (const r of rows) {
+      const v = r[s.key];
+      if (v == null || (pen && r.t - prev > 5000)) { pen = false; if (v == null) continue; }
+      const x = X(r.t), y = Y(v);
+      pen ? g.lineTo(x, y) : g.moveTo(x, y); pen = true; prev = r.t;
+    }
+    g.stroke();
+  }
+}
+
+function draw() {
+  lineChart($('c1'), [{ key: 'a', color: '--c-cur' }, { key: 'pwm', color: '--c-pwm' }]);
+  lineChart($('c2'), [{ key: 't1', color: '--c-t1' }, { key: 't2', color: '--c-t2' }]);
+}
+addEventListener('resize', draw);
+matchMedia('(prefers-color-scheme: dark)').addEventListener?.('change', draw);
+
+$('clear').onclick = () => { rows = []; draw(); $('count').textContent = '0 samples this session'; };
+$('csv').onclick = () => {
+  const out = ['board_time,pwm_pct,direction,current_a,i_r_a,i_l_a,temp1_c,temp2_c'];
+  for (const r of rows) { const m = r.raw; out.push([m.time, m.pwm, m.dir, m.a, m.ir, m.il, m.t1 ?? '', m.t2 ?? ''].join(',')); }
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([out.join('\n')], { type: 'text/csv' }));
+  a.download = 'motor_dashboard_' + new Date().toISOString().replace(/[:.]/g, '-') + '.csv';
+  a.click();
+};
+
+// ---- connect ----
+const client = mqtt.connect(BROKER, { reconnectPeriod: 3000, connectTimeout: 10000 });
+client.on('connect', () => {
+  setPill('link', 'linkTxt', 'on', 'Cloud: connected');
+  client.subscribe([TOPIC, TOPIC + '/online']);
+});
+client.on('reconnect', () => setPill('link', 'linkTxt', 'stale', 'Cloud: reconnecting…'));
+client.on('close', () => setPill('link', 'linkTxt', 'off', 'Cloud: disconnected'));
+client.on('message', (topic, payload, packet) => {
+  const s = payload.toString();
+  if (topic === TOPIC + '/online') { online = s === '1'; tick(); return; }
+  try { onData(JSON.parse(s), packet.retain); } catch (e) { /* ignore malformed */ }
+});
+tick();
+</script>
+</body>
+</html>
