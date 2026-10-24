@@ -78,6 +78,7 @@
   <div id="viewDash">
   <section class="tiles">
     <div class="tile"><div class="k">Peltier state</div><div class="v" id="tMotor">–</div><div class="s" id="tMode"></div></div>
+    <div class="tile"><div class="k">Thermal cycles</div><div class="v" id="tCyc">–</div><div class="s"><a href="#" id="cycSet" style="color:inherit">set count</a> · +/− reversal = 1</div></div>
     <div class="tile"><div class="k">Drive power</div><div class="v"><span id="tPwm">–</span><small>%</small></div></div>
     <div class="tile"><div class="k">Peltier current</div><div class="v"><span id="tA">–</span><small>A</small></div><div class="s" id="tLR"></div></div>
     <div class="tile"><div class="k">Temp 1</div><div class="v"><span id="tT1">–</span><small>°C</small></div></div>
@@ -130,6 +131,16 @@ const STALE_MS = 6000;
 const $ = id => document.getElementById(id);
 let rows = [];            // {t:ms, pwm, a, t1, t2, raw}
 let rangeMs = 30 * 60 * 1000;   // chart window; 0 = all stored
+// Thermal cycle counter: every heating<->cooling reversal (dwell ignored) is one cycle.
+// 67 = reversals found in the logs/*.csv recorded before this counter existed.
+const CYC_BASE = 67;
+let cyc = { n: CYC_BASE, dir: 0 };
+try { const c = JSON.parse(localStorage.getItem('cycles')); if (c && c.n >= 0) cyc = c; } catch (e) {}
+function cycUpdate(dir) {
+  if (dir === 0) return;
+  if (cyc.dir && dir !== cyc.dir) { cyc.n++; try { localStorage.setItem('cycles', JSON.stringify(cyc)); } catch (e) {} }
+  if (dir !== cyc.dir) { cyc.dir = dir; try { localStorage.setItem('cycles', JSON.stringify(cyc)); } catch (e) {} }
+}
 let last = null, lastAt = 0, online = null;
 
 // ---- persistent history (IndexedDB) ----
@@ -223,6 +234,7 @@ function onData(m, retained) {
   if (retained) { lastAt = Date.now() - 60000; render(); return; }   // old snapshot from the broker, not live
   lastAt = Date.now();
   rows.push({ t: lastAt, pwm: m.pwm, a: m.a, t1: m.t1, t2: m.t2, raw: m });
+  cycUpdate(m.dir);
   pending.push(rows[rows.length - 1]);
   const cut = lastAt - KEEP_MS;
   while (rows.length && rows[0].t < cut) rows.shift();
@@ -234,6 +246,7 @@ function render() {
   if (!m) return;
   $('tMotor').textContent = m.dir > 0 ? 'Heating' : m.dir < 0 ? 'Cooling' : 'Dwell / off';
   $('tMode').textContent = m.mode === 'AUTO' ? 'Auto thermal cycle' : 'Manual control';
+  $('tCyc').textContent = cyc.n;
   $('tPwm').textContent = m.pwm.toFixed(1);
   $('tA').textContent = m.a.toFixed(2);
   $('tLR').textContent = 'R ' + m.ir.toFixed(2) + ' · L ' + m.il.toFixed(2);
@@ -339,6 +352,14 @@ client.on('message', (topic, payload, packet) => {
 });
 try { if (localStorage.getItem('tab') === 'ser') showTab(true); } catch (e) {}
 try { const r = localStorage.getItem('range'); if (r !== null && [...$('range').options].some(o => o.value === r)) { $('range').value = r; rangeMs = +r; } } catch (e) {}
+$('tCyc').textContent = cyc.n;
+$('cycSet').onclick = e => {
+  e.preventDefault();
+  const v = prompt('Set total thermal cycles done so far:', cyc.n);
+  if (v === null || isNaN(+v) || +v < 0) return;
+  cyc.n = Math.floor(+v); try { localStorage.setItem('cycles', JSON.stringify(cyc)); } catch (err) {}
+  $('tCyc').textContent = cyc.n;
+};
 tick();
 (async () => {
   db = await dbOpen();
