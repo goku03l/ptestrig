@@ -17,7 +17,7 @@
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif; }
-  .wrap { max-width:1100px; margin:0 auto; padding:16px; }
+  .wrap { max-width:1100px; margin:0 auto; padding:16px; padding-left:max(16px,env(safe-area-inset-left)); padding-right:max(16px,env(safe-area-inset-right)); padding-bottom:max(16px,env(safe-area-inset-bottom)); }
   header { display:flex; flex-wrap:wrap; gap:12px; align-items:center; justify-content:space-between; margin-bottom:16px; }
   h1 { font-size:20px; margin:0; }
   .pill { display:inline-flex; align-items:center; gap:8px; padding:6px 12px; border-radius:999px; background:var(--card); border:1px solid var(--line); font-weight:600; }
@@ -31,8 +31,28 @@
   .tile .v { font-size:26px; font-weight:700; font-variant-numeric:tabular-nums; margin-top:2px; }
   .tile .v small { font-size:13px; font-weight:500; color:var(--muted); margin-left:3px; }
   .tile .s { color:var(--muted); font-size:12px; margin-top:2px; min-height:1em; }
-  .charts { display:grid; grid-template-columns:repeat(auto-fit,minmax(420px,1fr)); gap:12px; }
-  @media (max-width:520px) { .charts { grid-template-columns:1fr; } }
+  .charts { display:grid; grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr)); gap:12px; }
+  .tabs { display:flex; gap:4px; background:var(--card); border:1px solid var(--line); border-radius:12px; padding:4px; margin-bottom:16px; }
+  .tabs button { flex:1; border:0; background:transparent; min-height:40px; font-weight:600; color:var(--muted); border-radius:9px; }
+  .tabs button.active { background:var(--bg); color:var(--text); box-shadow:0 0 0 1px var(--line) inset; }
+  .hidden { display:none !important; }
+  .term { background:var(--card); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+  .bar { display:flex; flex-wrap:wrap; gap:8px; padding:10px; border-bottom:1px solid var(--line); align-items:center; }
+  .bar input[type=search] { flex:1 1 140px; min-width:0; font:inherit; padding:8px 10px; min-height:40px; border-radius:8px; border:1px solid var(--line); background:var(--bg); color:var(--text); }
+  .bar label { display:inline-flex; align-items:center; gap:6px; color:var(--muted); font-size:13px; min-height:40px; }
+  #log { height:60vh; min-height:260px; overflow:auto; padding:8px 10px; margin:0; font:12px/1.5 ui-monospace,Consolas,Menlo,monospace; white-space:pre-wrap; word-break:break-all; -webkit-overflow-scrolling:touch; }
+  #log .ev { color:var(--warn); } #log .cm { color:var(--muted); } #log .bad { color:var(--bad); }
+  .hint { padding:6px 10px; border-top:1px solid var(--line); color:var(--muted); font-size:12px; }
+  @media (max-width:560px) {
+    .wrap { padding-top:12px; }
+    h1 { font-size:18px; }
+    .tiles { grid-template-columns:repeat(2,1fr); gap:8px; }
+    .tile { padding:10px 12px; } .tile .v { font-size:22px; }
+    canvas { height:170px; }
+    button { min-height:40px; padding:8px 14px; }
+    .pill { padding:5px 10px; font-size:13px; }
+    #log { height:65vh; font-size:11.5px; }
+  }
   .chart { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:12px 14px; }
   .chart h2 { font-size:13px; margin:0 0 8px; display:flex; flex-wrap:wrap; gap:12px; align-items:center; }
   .chart h2 span.lg { font-weight:500; color:var(--muted); display:inline-flex; align-items:center; gap:5px; }
@@ -52,6 +72,9 @@
     </div>
   </header>
 
+  <nav class="tabs"><button id="tabDash" class="active">Dashboard</button><button id="tabSer">Serial monitor</button></nav>
+
+  <div id="viewDash">
   <section class="tiles">
     <div class="tile"><div class="k">Motor</div><div class="v" id="tMotor">–</div><div class="s" id="tMode"></div></div>
     <div class="tile"><div class="k">PWM</div><div class="v"><span id="tPwm">–</span><small>%</small></div></div>
@@ -74,6 +97,19 @@
     <button id="clear">Clear history</button>
     <span>History is kept in this browser tab only (last 30 min).</span>
   </footer>
+  </div>
+
+  <div id="viewSer" class="term hidden">
+    <div class="bar">
+      <button id="sPause">Pause</button>
+      <button id="sClear">Clear</button>
+      <button id="sCopy">Copy</button>
+      <input id="sFilter" type="search" placeholder="Filter lines…" autocomplete="off">
+      <label><input id="sScroll" type="checkbox" checked> Auto-scroll</label>
+    </div>
+    <pre id="log"></pre>
+    <div class="hint" id="sHint">Read-only view of what the board publishes (about 1 line per second). Commands are not sent from the web, for safety.</div>
+  </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/mqtt@5.3.4/dist/mqtt.min.js"></script>
@@ -97,7 +133,54 @@ function fmtUp(s) {
   return (d ? d + 'd ' : '') + (h ? h + 'h ' : '') + m + 'm ' + (s % 60) + 's';
 }
 
+// ---- serial monitor ----
+const ser = { lines: [], paused: false, max: 1500, n: 0 };
+function sAdd(text, cls) {
+  ser.lines.push({ text, cls: cls || '' });
+  if (ser.lines.length > ser.max) ser.lines.shift();
+  if (!ser.paused) sRender();
+}
+function sRender() {
+  const f = $('sFilter').value.toLowerCase();
+  const el = $('log');
+  const shown = ser.lines.filter(l => !f || l.text.toLowerCase().includes(f)).slice(-600);
+  el.textContent = '';
+  const frag = document.createDocumentFragment();
+  for (const l of shown) {
+    const d = document.createElement('div');
+    d.textContent = l.text; if (l.cls) d.className = l.cls;
+    frag.appendChild(d);
+  }
+  el.appendChild(frag);
+  if ($('sScroll').checked) el.scrollTop = el.scrollHeight;
+}
+const f1 = v => v == null ? 'nan' : v.toFixed(1);
+function serialLine(m) {
+  return 'Time:' + m.time + ',PWM_pct:' + m.pwm.toFixed(1) + ',Direction:' + m.dir + ',Current_A:' + m.a.toFixed(2) +
+         ',I_R:' + m.ir.toFixed(2) + ',I_L:' + m.il.toFixed(2) + ',Temp1_C:' + f1(m.t1) + ',Temp2_C:' + f1(m.t2);
+}
+$('sPause').onclick = () => { ser.paused = !ser.paused; $('sPause').textContent = ser.paused ? 'Resume' : 'Pause'; if (!ser.paused) sRender(); };
+$('sClear').onclick = () => { ser.lines = []; sRender(); };
+$('sFilter').oninput = sRender;
+$('sCopy').onclick = async () => {
+  const t = ser.lines.map(l => l.text).join('\n');
+  try { await navigator.clipboard.writeText(t); $('sHint').textContent = 'Copied ' + ser.lines.length + ' lines.'; }
+  catch (e) { $('sHint').textContent = 'Copy not allowed by this browser.'; }
+};
+function showTab(ser_) {
+  $('viewDash').classList.toggle('hidden', ser_); $('viewSer').classList.toggle('hidden', !ser_);
+  $('tabDash').classList.toggle('active', !ser_); $('tabSer').classList.toggle('active', ser_);
+  try { localStorage.setItem('tab', ser_ ? 'ser' : 'dash'); } catch (e) {}
+  if (ser_) sRender(); else draw();
+}
+$('tabDash').onclick = () => showTab(false);
+$('tabSer').onclick = () => showTab(true);
+
 function onData(m, retained) {
+  if (retained) sAdd('# (last known data from the board, may be old)', 'cm');
+  sAdd(serialLine(m), retained ? 'cm' : '');
+  if (!retained && ++ser.n % 5 === 0)
+    sAdd('# Status: time ' + m.time + ' | mode ' + m.mode + ' | SD ' + (m.sd ? 'logging' : 'NOT logging') + ' | WiFi ' + m.rssi + ' dBm | up ' + fmtUp(m.up), 'cm');
   last = m;
   if (retained) { lastAt = Date.now() - 60000; render(); return; }   // old snapshot from the broker, not live
   lastAt = Date.now();
@@ -196,15 +279,17 @@ $('csv').onclick = () => {
 const client = mqtt.connect(BROKER, { reconnectPeriod: 3000, connectTimeout: 10000 });
 client.on('connect', () => {
   setPill('link', 'linkTxt', 'on', 'Cloud: connected');
+  sAdd('# Cloud connected, waiting for the board…', 'ev');
   client.subscribe([TOPIC, TOPIC + '/online']);
 });
 client.on('reconnect', () => setPill('link', 'linkTxt', 'stale', 'Cloud: reconnecting…'));
-client.on('close', () => setPill('link', 'linkTxt', 'off', 'Cloud: disconnected'));
+client.on('close', () => { setPill('link', 'linkTxt', 'off', 'Cloud: disconnected'); sAdd('# Cloud connection lost - retrying', 'bad'); });
 client.on('message', (topic, payload, packet) => {
   const s = payload.toString();
-  if (topic === TOPIC + '/online') { online = s === '1'; tick(); return; }
+  if (topic === TOPIC + '/online') { online = s === '1'; sAdd(online ? '# Board ONLINE' : '# Board OFFLINE (lost power or internet)', online ? 'ev' : 'bad'); tick(); return; }
   try { onData(JSON.parse(s), packet.retain); } catch (e) { /* ignore malformed */ }
 });
+try { if (localStorage.getItem('tab') === 'ser') showTab(true); } catch (e) {}
 tick();
 </script>
 </body>
