@@ -8,12 +8,12 @@
   :root {
     --bg:#f5f6f8; --card:#fff; --text:#1c2230; --muted:#6b7385; --line:#e2e5ec; --grid:#eceef3;
     --ok:#1a8f4c; --bad:#c93a3a; --warn:#c98a1a;
-    --c-pwm:#2b6cdf; --c-cur:#d9482b; --c-t1:#1a8f4c; --c-t2:#8a4fd0;
+    --c-pwm:#2b6cdf; --c-sp:#d9482b; --c-t3:#0b7fa8; --c-t1:#1a8f4c; --c-t2:#8a4fd0;
   }
   @media (prefers-color-scheme: dark) {
     :root { --bg:#12151c; --card:#1b2029; --text:#e8ebf2; --muted:#8c95a8; --line:#2a3140; --grid:#242a37;
             --ok:#3ac47a; --bad:#ef6a6a; --warn:#e5ae4a;
-            --c-pwm:#6ea0ff; --c-cur:#ff8566; --c-t1:#46d08a; --c-t2:#b88af0; }
+            --c-pwm:#6ea0ff; --c-sp:#ff8566; --c-t3:#4cc3ee; --c-t1:#46d08a; --c-t2:#b88af0; }
   }
   * { box-sizing:border-box; }
   body { margin:0; background:var(--bg); color:var(--text); font:14px/1.4 system-ui,-apple-system,Segoe UI,sans-serif; }
@@ -77,10 +77,11 @@
 
   <div id="viewDash">
   <section class="tiles">
+    <div class="tile"><div class="k">Water temp (NTC3)</div><div class="v"><span id="tT3">–</span><small>°C</small></div><div class="s" id="tErr"></div></div>
+    <div class="tile"><div class="k">Target</div><div class="v"><span id="tSp">–</span><small>°C</small></div><div class="s" id="tPh"></div></div>
     <div class="tile"><div class="k">Peltier state</div><div class="v" id="tMotor">–</div><div class="s" id="tMode"></div></div>
     <div class="tile"><div class="k">Thermal cycles</div><div class="v" id="tCyc">–</div><div class="s"><a href="#" id="cycSet" style="color:inherit">set count</a> · +/− reversal = 1</div></div>
     <div class="tile"><div class="k">Drive power</div><div class="v"><span id="tPwm">–</span><small>%</small></div></div>
-    <div class="tile"><div class="k">Peltier current</div><div class="v"><span id="tA">–</span><small>A</small></div><div class="s" id="tLR"></div></div>
     <div class="tile"><div class="k">Temp 1</div><div class="v"><span id="tT1">–</span><small>°C</small></div></div>
     <div class="tile"><div class="k">Temp 2</div><div class="v"><span id="tT2">–</span><small>°C</small></div></div>
     <div class="tile"><div class="k">SD card</div><div class="v" id="tSd">–</div></div>
@@ -89,8 +90,9 @@
   </section>
 
   <section class="charts">
-    <div class="chart"><h2>Drive current &amp; power <span class="lg"><i style="background:var(--c-cur)"></i>Current A</span> <span class="lg"><i style="background:var(--c-pwm)"></i>Drive %</span></h2><canvas id="c1"></canvas></div>
-    <div class="chart"><h2>Temperature <span class="lg"><i style="background:var(--c-t1)"></i>Temp 1 °C</span> <span class="lg"><i style="background:var(--c-t2)"></i>Temp 2 °C</span></h2><canvas id="c2"></canvas></div>
+    <div class="chart"><h2>Water temperature vs target <span class="lg"><i style="background:var(--c-t3)"></i>Water °C</span> <span class="lg"><i style="background:var(--c-sp)"></i>Target °C</span></h2><canvas id="c1"></canvas></div>
+    <div class="chart"><h2>Drive power (+ heating, − cooling) <span class="lg"><i style="background:var(--c-pwm)"></i>Drive %</span></h2><canvas id="c3"></canvas></div>
+    <div class="chart"><h2>Other sensors <span class="lg"><i style="background:var(--c-t1)"></i>Temp 1 °C</span> <span class="lg"><i style="background:var(--c-t2)"></i>Temp 2 °C</span></h2><canvas id="c2"></canvas></div>
   </section>
 
   <footer>
@@ -129,7 +131,7 @@ const KEEP_MS = 7 * 24 * 3600 * 1000;   // history kept in this browser (Indexed
 const STALE_MS = 6000;
 
 const $ = id => document.getElementById(id);
-let rows = [];            // {t:ms, pwm, a, t1, t2, raw}
+let rows = [];            // {t:ms, pwm, spwm, t1, t2, t3, sp, raw}
 let rangeMs = 30 * 60 * 1000;   // chart window; 0 = all stored
 // Thermal cycle counter: every heating<->cooling reversal (dwell ignored) is one cycle.
 // 1168 = 4h13m10s of auto running (15190 s) / 13 s per heat-or-cool phase.
@@ -142,6 +144,8 @@ function cycUpdate(dir) {
   if (dir !== cyc.dir) { cyc.dir = dir; try { localStorage.setItem('cycles2', JSON.stringify(cyc)); } catch (e) {} }
 }
 let last = null, lastAt = 0, online = null;
+// dir is the raw IBT-2 side (1 = RPWM); cd is the side that cools. Returns 1 heating, -1 cooling, 0 off.
+const heatSign = m => m.dir === 0 ? 0 : (m.dir === (m.cd || 1) ? -1 : 1);
 
 // ---- persistent history (IndexedDB) ----
 let db = null, pending = [];
@@ -205,8 +209,8 @@ function sRender() {
 }
 const f1 = v => v == null ? 'nan' : v.toFixed(1);
 function serialLine(m) {
-  return 'Time:' + m.time + ',PWM_pct:' + m.pwm.toFixed(1) + ',Direction:' + m.dir + ',Current_A:' + m.a.toFixed(2) +
-         ',I_R:' + m.ir.toFixed(2) + ',I_L:' + m.il.toFixed(2) + ',Temp1_C:' + f1(m.t1) + ',Temp2_C:' + f1(m.t2);
+  return 'Time:' + m.time + ',PWM_pct:' + m.pwm.toFixed(1) + ',Direction:' + m.dir + ',Temp1_C:' + f1(m.t1) + ',Temp2_C:' + f1(m.t2) +
+         ',Temp3_C:' + f1(m.t3) + ',Setpoint_C:' + f1(m.sp) + ',Phase:' + m.ph;
 }
 $('sPause').onclick = () => { ser.paused = !ser.paused; $('sPause').textContent = ser.paused ? 'Resume' : 'Pause'; if (!ser.paused) sRender(); };
 $('sClear').onclick = () => { ser.lines = []; sRender(); };
@@ -233,8 +237,9 @@ function onData(m, retained) {
   last = m;
   if (retained) { lastAt = Date.now() - 60000; render(); return; }   // old snapshot from the broker, not live
   lastAt = Date.now();
-  rows.push({ t: lastAt, pwm: m.pwm, a: m.a, t1: m.t1, t2: m.t2, raw: m });
-  cycUpdate(m.dir);
+  const hs = heatSign(m);
+  rows.push({ t: lastAt, pwm: m.pwm, spwm: m.pwm * hs, t1: m.t1, t2: m.t2, t3: m.t3, sp: m.sp, raw: m });
+  cycUpdate(hs);
   pending.push(rows[rows.length - 1]);
   const cut = lastAt - KEEP_MS;
   while (rows.length && rows[0].t < cut) rows.shift();
@@ -244,12 +249,15 @@ function onData(m, retained) {
 function render() {
   const m = last;
   if (!m) return;
-  $('tMotor').textContent = m.dir > 0 ? 'Heating' : m.dir < 0 ? 'Cooling' : 'Dwell / off';
-  $('tMode').textContent = m.mode === 'AUTO' ? 'Auto thermal cycle' : 'Manual control';
+  const hs = heatSign(m);
+  $('tMotor').textContent = hs > 0 ? 'Heating' : hs < 0 ? 'Cooling' : 'Idle / off';
+  $('tMode').textContent = m.mode === 'AUTO' ? 'Auto profile' : 'Manual control';
+  $('tT3').textContent = m.t3 == null ? 'no sensor' : m.t3.toFixed(1);
+  $('tSp').textContent = m.sp == null ? '–' : m.sp.toFixed(1);
+  $('tErr').textContent = m.t3 == null || m.sp == null ? '' : (m.t3 - m.sp >= 0 ? '+' : '') + (m.t3 - m.sp).toFixed(1) + ' °C from target';
+  $('tPh').textContent = ({ REACHING: 'Reaching target', HOLD: 'Holding (hourly step)', CAL: 'Detecting polarity', MANUAL: 'Manual' })[m.ph] || m.ph || '';
   $('tCyc').textContent = cyc.n;
   $('tPwm').textContent = m.pwm.toFixed(1);
-  $('tA').textContent = m.a.toFixed(2);
-  $('tLR').textContent = 'R ' + m.ir.toFixed(2) + ' · L ' + m.il.toFixed(2);
   $('tT1').textContent = m.t1 == null ? 'no sensor' : m.t1.toFixed(1);
   $('tT2').textContent = m.t2 == null ? 'no sensor' : m.t2.toFixed(1);
   $('tSd').textContent = m.sd ? 'Logging' : 'Not logging';
@@ -316,7 +324,8 @@ function lineChart(cv, series, unitsRight) {
 }
 
 function draw() {
-  lineChart($('c1'), [{ key: 'a', color: '--c-cur' }, { key: 'pwm', color: '--c-pwm' }]);
+  lineChart($('c1'), [{ key: 't3', color: '--c-t3' }, { key: 'sp', color: '--c-sp' }]);
+  lineChart($('c3'), [{ key: 'spwm', color: '--c-pwm' }]);
   lineChart($('c2'), [{ key: 't1', color: '--c-t1' }, { key: 't2', color: '--c-t2' }]);
 }
 addEventListener('resize', draw);
@@ -328,8 +337,8 @@ $('clear').onclick = () => {
   rows = []; pending = []; dbClear(); draw(); $('count').textContent = '0 samples stored';
 };
 $('csv').onclick = () => {
-  const out = ['pc_time,board_time,pwm_pct,direction,current_a,i_r_a,i_l_a,temp1_c,temp2_c'];
-  for (const r of rows) { const m = r.raw; out.push([new Date(r.t).toISOString(), m.time, m.pwm, m.dir, m.a, m.ir, m.il, m.t1 ?? '', m.t2 ?? ''].join(',')); }
+  const out = ['pc_time,board_time,pwm_pct,direction,cool_dir,temp1_c,temp2_c,temp3_c,setpoint_c,phase'];
+  for (const r of rows) { const m = r.raw; out.push([new Date(r.t).toISOString(), m.time, m.pwm, m.dir, m.cd ?? '', m.t1 ?? '', m.t2 ?? '', m.t3 ?? '', m.sp ?? '', m.ph ?? ''].join(',')); }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([out.join('\n')], { type: 'text/csv' }));
   a.download = 'peltier_cycle_' + new Date().toISOString().replace(/[:.]/g, '-') + '.csv';
