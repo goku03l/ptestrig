@@ -144,8 +144,9 @@ function cycUpdate(dir) {
   if (dir !== cyc.dir) { cyc.dir = dir; try { localStorage.setItem('cycles2', JSON.stringify(cyc)); } catch (e) {} }
 }
 let last = null, lastAt = 0, online = null;
-// dir is the raw IBT-2 side (1 = RPWM); cd is the side that cools. Returns 1 heating, -1 cooling, 0 off.
-const heatSign = m => m.dir === 0 ? 0 : (m.dir === (m.cd || 1) ? -1 : 1);
+// Firmware: dir 1 (RPWM / forward) = COOLING, dir -1 (LPWM / reverse) = HEATING.
+// Returns 1 heating, -1 cooling, 0 off.
+const heatSign = m => m.dir === 0 ? 0 : (m.dir > 0 ? -1 : 1);
 
 // ---- persistent history (IndexedDB) ----
 let db = null, pending = [];
@@ -337,8 +338,8 @@ $('clear').onclick = () => {
   rows = []; pending = []; dbClear(); draw(); $('count').textContent = '0 samples stored';
 };
 $('csv').onclick = () => {
-  const out = ['pc_time,board_time,pwm_pct,direction,cool_dir,temp1_c,temp2_c,temp3_c,setpoint_c,phase'];
-  for (const r of rows) { const m = r.raw; out.push([new Date(r.t).toISOString(), m.time, m.pwm, m.dir, m.cd ?? '', m.t1 ?? '', m.t2 ?? '', m.t3 ?? '', m.sp ?? '', m.ph ?? ''].join(',')); }
+  const out = ['pc_time,board_time,pwm_pct,direction,temp1_c,temp2_c,temp3_c,setpoint_c,phase'];
+  for (const r of rows) { const m = r.raw; out.push([new Date(r.t).toISOString(), m.time, m.pwm, m.dir, m.t1 ?? '', m.t2 ?? '', m.t3 ?? '', m.sp ?? '', m.ph ?? ''].join(',')); }
   const a = document.createElement('a');
   a.href = URL.createObjectURL(new Blob([out.join('\n')], { type: 'text/csv' }));
   a.download = 'peltier_cycle_' + new Date().toISOString().replace(/[:.]/g, '-') + '.csv';
