@@ -91,7 +91,7 @@
 
   <section class="charts">
     <div class="chart"><h2>Water temperature vs target <span class="lg"><i style="background:var(--c-t3)"></i>Water °C</span> <span class="lg"><i style="background:var(--c-sp)"></i>Target °C</span></h2><canvas id="c1"></canvas></div>
-    <div class="chart"><h2>Drive power (+ heating, − cooling) <span class="lg"><i style="background:var(--c-pwm)"></i>Drive %</span></h2><canvas id="c3"></canvas></div>
+    <div class="chart"><h2>Drive power (+ cooling, − heating) <span class="lg"><i style="background:var(--c-pwm)"></i>Drive %</span></h2><canvas id="c3"></canvas></div>
     <div class="chart"><h2>Other sensors <span class="lg"><i style="background:var(--c-t1)"></i>Temp 1 °C</span> <span class="lg"><i style="background:var(--c-t2)"></i>Temp 2 °C</span></h2><canvas id="c2"></canvas></div>
   </section>
 
@@ -239,7 +239,7 @@ function onData(m, retained) {
   if (retained) { lastAt = Date.now() - 60000; render(); return; }   // old snapshot from the broker, not live
   lastAt = Date.now();
   const hs = heatSign(m);
-  rows.push({ t: lastAt, pwm: m.pwm, spwm: m.pwm * hs, t1: m.t1, t2: m.t2, t3: m.t3, sp: m.sp, raw: m });
+  rows.push({ t: lastAt, pwm: m.pwm, spwm: -m.pwm * hs, t1: m.t1, t2: m.t2, t3: m.t3, sp: m.sp, raw: m });
   cycUpdate(hs);
   pending.push(rows[rows.length - 1]);
   const cut = lastAt - KEEP_MS;
@@ -374,6 +374,7 @@ tick();
 (async () => {
   db = await dbOpen();
   const old = await dbLoad();
+  for (const r of old) if (r.raw) r.spwm = r.raw.dir > 0 ? r.raw.pwm : r.raw.dir < 0 ? -r.raw.pwm : 0;   // re-sign stored rows: + cooling, − heating
   rows = old.concat(rows.filter(r => !old.length || r.t > old[old.length - 1].t));
   pending = pending.filter(r => !old.length || r.t > old[old.length - 1].t);
   $('count').textContent = rows.length + ' samples stored';
